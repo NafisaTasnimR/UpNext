@@ -3,6 +3,7 @@ package org.example.upnext.model;
 import java.time.OffsetDateTime;
 
 
+
 public class TaskDependency {
     private Long depId;
     private Long predecessorTaskId;

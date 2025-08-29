@@ -3,6 +3,7 @@ package org.example.upnext.model;
 import java.time.OffsetDateTime;
 
 
+
 public class Notification {
     private Long notifId;
     private Long userId;

@@ -3,6 +3,7 @@ package org.example.upnext.model;
 import java.time.OffsetDateTime;
 
 
+
 public class Attachment {
     private Long attachmentId;
     private Long taskId;
