@@ -1,4 +1,4 @@
-package org.example.upnext.Service;
+package org.example.upnext.service;
 
 
 import org.example.upnext.dao.UserDAO;

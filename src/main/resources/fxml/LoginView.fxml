@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:controller="org.example.upnext.ui.controller.LoginController">
+    <center>
+        <VBox alignment="CENTER" spacing="10" maxWidth="320">
+            <Label text="UpNext – Login" style="-fx-font-size:18; -fx-font-weight:bold;"/>
+            <TextField fx:id="usernameField" promptText="Username" />
+            <PasswordField fx:id="passwordField" promptText="Password" />
+            <Button text="Login" onAction="#onLogin" maxWidth="Infinity"/>
+            <Label fx:id="errorLabel" textFill="red"/>
+        </VBox>
+    </center>
+    <padding><Insets topRightBottomLeft="24"/></padding>
+</BorderPane>
