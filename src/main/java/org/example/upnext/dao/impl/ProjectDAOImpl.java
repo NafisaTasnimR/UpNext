@@ -1,0 +1,90 @@
+package org.example.upnext.dao.impl;
+
+import org.example.upnext.dao.BaseDAO;
+import org.example.upnext.dao.ProjectDAO;
+import org.example.upnext.model.Project;
+
+import java.sql.*;
+import java.sql.Date;
+import java.util.*;
+
+
+public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
+
+    private Project map(ResultSet rs) throws SQLException {
+        Project p = new Project();
+        p.setProjectId(rs.getLong("PROJECT_ID"));
+        p.setName(rs.getString("NAME"));
+        p.setDescription(rs.getString("DESCRIPTION"));
+        p.setOwnerId(rs.getLong("OWNER_ID"));
+        Date sd = rs.getDate("START_DATE"); if (sd != null) p.setStartDate(sd.toLocalDate());
+        Date ed = rs.getDate("END_DATE");   if (ed != null) p.setEndDate(ed.toLocalDate());
+        p.setStatus(rs.getString("STATUS"));
+        return p;
+    }
+
+    @Override
+    public long create(Project p) throws SQLException {
+        String sql = "INSERT INTO PROJECTS (PROJECT_ID, NAME, DESCRIPTION, OWNER_ID, START_DATE, END_DATE, STATUS) VALUES (?,?,?,?,?,?,?)";
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
+            long id = nextVal(c, "PROJECTS_SEQ");
+            ps.setLong(1, id);
+            ps.setString(2, p.getName());
+            ps.setString(3, p.getDescription());
+            ps.setLong(4, p.getOwnerId());
+            if (p.getStartDate() != null) ps.setDate(5, Date.valueOf(p.getStartDate())); else ps.setNull(5, Types.DATE);
+            if (p.getEndDate() != null)   ps.setDate(6, Date.valueOf(p.getEndDate()));   else ps.setNull(6, Types.DATE);
+            ps.setString(7, p.getStatus() == null ? "PLANNING" : p.getStatus());
+            ps.executeUpdate();
+            return id;
+        }
+    }
+
+    @Override public Optional<Project> findById(long id) throws SQLException {
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement("SELECT * FROM PROJECTS WHERE PROJECT_ID=?")) {
+            ps.setLong(1, id); try (ResultSet rs = ps.executeQuery()) { return rs.next() ? Optional.of(map(rs)) : Optional.empty(); }
+        }
+    }
+
+    @Override public List<Project> findByOwner(long ownerId) throws SQLException {
+        String sql = "SELECT * FROM PROJECTS WHERE OWNER_ID=? ORDER BY PROJECT_ID DESC";
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, ownerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<Project> list = new ArrayList<>();
+                while (rs.next()) list.add(map(rs));
+                return list;
+            }
+        }
+    }
+
+    @Override public List<Project> findAll() throws SQLException {
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement("SELECT * FROM PROJECTS ORDER BY PROJECT_ID DESC");
+             ResultSet rs = ps.executeQuery()) {
+            List<Project> list = new ArrayList<>();
+            while (rs.next()) list.add(map(rs));
+            return list;
+        }
+    }
+
+    @Override public void update(Project p) throws SQLException {
+        String sql = "UPDATE PROJECTS SET NAME=?, DESCRIPTION=?, OWNER_ID=?, START_DATE=?, END_DATE=?, STATUS=? WHERE PROJECT_ID=?";
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, p.getName());
+            ps.setString(2, p.getDescription());
+            ps.setLong(3, p.getOwnerId());
+            if (p.getStartDate() != null) ps.setDate(4, Date.valueOf(p.getStartDate())); else ps.setNull(4, Types.DATE);
+            if (p.getEndDate() != null)   ps.setDate(5, Date.valueOf(p.getEndDate()));   else ps.setNull(5, Types.DATE);
+            ps.setString(6, p.getStatus());
+            ps.setLong(7, p.getProjectId());
+            ps.executeUpdate();
+        }
+    }
+
+    @Override public void delete(long id) throws SQLException {
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement("DELETE FROM PROJECTS WHERE PROJECT_ID=?")) {
+            ps.setLong(1, id); ps.executeUpdate();
+        }
+    }
+}
+
