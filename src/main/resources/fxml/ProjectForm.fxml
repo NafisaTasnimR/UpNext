@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<VBox xmlns:fx="http://javafx.com/fxml" fx:controller="org.example.upnext.ui.controller.ProjectFormController" spacing="8" style="-fx-padding:12;">
+    <Label text="Project" style="-fx-font-size:16;-fx-font-weight:bold;"/>
+    <TextField fx:id="nameField" promptText="Project name"/>
+    <TextArea fx:id="descArea" promptText="Description" prefRowCount="4"/>
+    <HBox spacing="8">
+        <DatePicker fx:id="startPicker" promptText="Start"/>
+        <DatePicker fx:id="endPicker" promptText="End"/>
+    </HBox>
+    <HBox spacing="8">
+        <Label text="Status:"/>
+        <ComboBox fx:id="statusBox"/>
+    </HBox>
+    <HBox spacing="8">
+        <Button text="Save" onAction="#onSave"/>
+        <Button text="Cancel" onAction="#onCancel"/>
+    </HBox>
+</VBox>
