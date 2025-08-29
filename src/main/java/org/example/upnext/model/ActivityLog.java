@@ -2,6 +2,7 @@ package org.example.upnext.model;
 
 import java.time.OffsetDateTime;
 
+
 public class ActivityLog {
     private Long logId;
     private OffsetDateTime occurredAt;

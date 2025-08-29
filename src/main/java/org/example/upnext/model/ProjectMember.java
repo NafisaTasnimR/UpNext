@@ -2,6 +2,7 @@ package org.example.upnext.model;
 
 import java.time.OffsetDateTime;
 
+
 public class ProjectMember {
     private Long projectMemberId;
     private Long projectId;

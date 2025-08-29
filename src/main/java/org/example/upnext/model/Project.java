@@ -3,6 +3,7 @@ package org.example.upnext.model;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
+
 public class Project {
     private Long projectId;
     private String name;
