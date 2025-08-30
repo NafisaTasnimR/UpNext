@@ -58,14 +58,16 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
         }
     }
 
-    @Override public List<Project> findAll() throws SQLException {
-        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement("SELECT * FROM PROJECTS ORDER BY PROJECT_ID DESC");
+    public List<Project> findAll() throws SQLException {
+        String sql = "SELECT * FROM PROJECTS ORDER BY CREATED_AT DESC";
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             List<Project> list = new ArrayList<>();
             while (rs.next()) list.add(map(rs));
             return list;
         }
     }
+
 
     @Override public void update(Project p) throws SQLException {
         String sql = "UPDATE PROJECTS SET NAME=?, DESCRIPTION=?, OWNER_ID=?, START_DATE=?, END_DATE=?, STATUS=? WHERE PROJECT_ID=?";
@@ -86,5 +88,29 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
             ps.setLong(1, id); ps.executeUpdate();
         }
     }
+
+    @Override
+    public List<Project> findByManager(long managerId) throws SQLException {
+        String sql = "SELECT * FROM PROJECTS WHERE ASSIGNED_MANAGER_ID=?";
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, managerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<Project> list = new ArrayList<>();
+                while (rs.next()) list.add(map(rs));
+                return list;
+            }
+        }
+    }
+
+    @Override
+    public void assignManager(long projectId, long managerId) throws SQLException {
+        String sql = "UPDATE PROJECTS SET ASSIGNED_MANAGER_ID=? WHERE PROJECT_ID=?";
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, managerId);
+            ps.setLong(2, projectId);
+            ps.executeUpdate();
+        }
+    }
+
 }
 

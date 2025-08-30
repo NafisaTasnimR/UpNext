@@ -30,8 +30,30 @@ public class DashboardController {
     public void setCurrentUser(User u) {
         this.currentUser = u;
         statusLabel.setText("Logged in as: " + u.getUsername());
-        loadProjects();
+        loadProjects();          // <-- single source of truth
+        // optional: if you show overdue/blocked/notifs
     }
+
+    private void loadProjects() {
+        try {
+            if (currentUser == null) {
+                projectTable.getItems().clear();
+                return;
+            }
+            String role = currentUser.getGlobalRole();
+            if ("MANAGER".equalsIgnoreCase(role)) {
+                projectTable.getItems().setAll(projectService.byManager(currentUser.getUserId()));
+            } else if ("ADMIN".equalsIgnoreCase(role)) {
+                projectTable.getItems().setAll(projectService.all());  // see note below
+            } else {
+                // Members typically don't own projects; show none (or show projects that contain their tasks if you add that feature)
+                projectTable.getItems().clear();
+            }
+        } catch (Exception e) {
+            statusLabel.setText("Failed to load projects: " + e.getMessage());
+        }
+    }
+
 
     @FXML
     public void initialize() {
@@ -64,14 +86,6 @@ public class DashboardController {
         taskTree.getColumns().setAll(titleCol, stCol, prCol, prgCol);
     }
 
-    private void loadProjects() {
-        try {
-            long ownerId = (currentUser != null) ? currentUser.getUserId() : 1L;
-            projectTable.getItems().setAll(projectService.byOwner(ownerId));
-        } catch (SQLException e) {
-            statusLabel.setText("Failed to load projects: " + e.getMessage());
-        }
-    }
 
     @FXML
     public void onOpenProject() {
@@ -221,6 +235,30 @@ public class DashboardController {
             statusLabel.setText("Logout failed: " + e.getMessage());
         }
     }
+
+    @FXML
+    public void onAssignManager() {
+        Project p = projectTable.getSelectionModel().getSelectedItem();
+        if (p == null) { statusLabel.setText("Select a project first."); return; }
+
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/AssignManagerDialog.fxml"));
+            Scene scene = new Scene(loader.load());
+            AssignManagerController ctrl = loader.getController();
+            ctrl.init(p, (proj, manager) -> {
+                statusLabel.setText("Assigned project '" + proj.getName() + "' to " + manager.getUsername());
+                loadProjects(); // refresh
+            });
+            Stage dlg = new Stage();
+            dlg.initModality(Modality.APPLICATION_MODAL);
+            dlg.setTitle("Assign Manager");
+            dlg.setScene(scene);
+            dlg.showAndWait();
+        } catch (Exception e) {
+            statusLabel.setText("Open dialog failed: " + e.getMessage());
+        }
+    }
+
 
     private Task getSelectedTask() {
         TreeItem<Task> item = taskTree.getSelectionModel().getSelectedItem();
