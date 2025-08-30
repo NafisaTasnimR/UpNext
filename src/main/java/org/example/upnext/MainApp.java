@@ -19,9 +19,13 @@ public class MainApp extends Application {
             }
         } catch (Exception ignored) {}
 
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/LoginView.fxml"));
+        /*FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/LoginView.fxml"));
         Scene scene = new Scene(loader.load(), 920, 600);
         stage.setTitle(title);
+        stage.setScene(scene);
+        stage.show();*/
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/LandingView.fxml"));
+        Scene scene = new Scene(loader.load(), 920, 600);
         stage.setScene(scene);
         stage.show();
     }

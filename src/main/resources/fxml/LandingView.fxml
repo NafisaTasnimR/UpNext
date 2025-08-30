@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="org.example.upnext.ui.controller.LandingController"
+            fx:id="root">
+
+    <center>
+        <VBox spacing="14" alignment="CENTER" maxWidth="360">
+            <Label text="UpNext" style="-fx-font-size:22; -fx-font-weight:bold;"/>
+            <Label text="Welcome! Please choose an option."/>
+            <Button text="Login"    onAction="#onLogin"    maxWidth="Infinity"/>
+            <Button text="Register" onAction="#onRegister" maxWidth="Infinity"/>
+        </VBox>
+    </center>
+    <padding><Insets topRightBottomLeft="24"/></padding>
+</BorderPane>

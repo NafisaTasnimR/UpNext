@@ -40,4 +40,18 @@ public class LoginController {
             errorLabel.setText(ex.getMessage());
         }
     }
+
+    @FXML
+    public void onBack() {
+        try {
+            Stage stage = (Stage) usernameField.getScene().getWindow(); // <- from injected control
+            Scene scene = new Scene(new FXMLLoader(getClass().getResource("/fxml/LandingView.fxml")).load(), 920, 600);
+            stage.setScene(scene);
+            stage.centerOnScreen();
+        } catch (Exception e) {
+            errorLabel.setText(e.getMessage());
+        }
+    }
+
+
 }
