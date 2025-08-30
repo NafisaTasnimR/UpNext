@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="org.example.upnext.ui.controller.RegisterController">
+    <center>
+        <VBox spacing="10" alignment="CENTER" maxWidth="360">
+            <Label text="Create your account" style="-fx-font-size:18; -fx-font-weight:bold;"/>
+            <TextField fx:id="usernameField" promptText="Username"/>
+            <TextField fx:id="emailField"    promptText="Email"/>
+            <PasswordField fx:id="passwordField"  promptText="Password"/>
+            <PasswordField fx:id="confirmField"   promptText="Confirm password"/>
+            <HBox spacing="8">
+                <Label text="Role:"/>
+                <ComboBox fx:id="roleBox" prefWidth="200"/>
+            </HBox>
+            <HBox spacing="8">
+                <Button text="Register" onAction="#onRegister" maxWidth="Infinity"/>
+                <Button text="Back to Login" onAction="#onBack" maxWidth="Infinity"/>
+            </HBox>
+            <Label fx:id="errorLabel" textFill="red"/>
+        </VBox>
+    </center>
+    <padding><Insets topRightBottomLeft="24"/></padding>
+</BorderPane>
