@@ -14,5 +14,6 @@ public interface UserDAO {
     List<User> findAll() throws SQLException;
     void update(User u) throws SQLException;
     void delete(long id) throws SQLException;
+    List<User> findManagers() throws SQLException;
 }
 

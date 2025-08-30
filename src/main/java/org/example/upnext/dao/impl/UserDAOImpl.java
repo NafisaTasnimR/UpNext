@@ -1,6 +1,7 @@
 package org.example.upnext.dao.impl;
 
 
+import org.example.upnext.config.Db;
 import org.example.upnext.dao.BaseDAO;
 import org.example.upnext.dao.UserDAO;
 import org.example.upnext.model.User;
@@ -87,5 +88,17 @@ public class UserDAOImpl extends BaseDAO implements UserDAO {
             ps.setLong(1, id); ps.executeUpdate();
         }
     }
+    @Override
+    public List<User> findManagers() throws SQLException {
+        String sql = "SELECT * FROM USERS WHERE UPPER(GLOBAL_ROLE)='MANAGER'";
+        try (Connection c = Db.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            List<User> list = new ArrayList<>();
+            while (rs.next()) list.add(map(rs));
+            return list;
+        }
+    }
+
 }
 

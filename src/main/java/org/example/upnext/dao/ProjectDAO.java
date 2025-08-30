@@ -13,5 +13,8 @@ public interface ProjectDAO {
     List<Project> findAll() throws SQLException;
     void update(Project p) throws SQLException;
     void delete(long id) throws SQLException;
+    List<Project> findByManager(long managerId) throws SQLException;
+    void assignManager(long projectId, long managerId) throws SQLException;
+
 }
 

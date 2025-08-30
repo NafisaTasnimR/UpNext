@@ -6,7 +6,7 @@ public class Main {
 
     // Database connection parameters
     private static final String DB_HOST = "localhost";
-    private static final String DB_PORT = "1522";
+    private static final String DB_PORT = "1521";
     private static final String DB_SERVICE_NAME = "XEPDB1";
     private static final String DB_USERNAME = "UPNEXT";
     private static final String DB_PASSWORD = "myPass";

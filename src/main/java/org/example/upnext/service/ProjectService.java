@@ -38,4 +38,14 @@ public class ProjectService {
         double sum = tasks.stream().mapToDouble(Task::getProgressPct).sum();
         return Math.round((sum / tasks.size()) * 100.0) / 100.0;
     }
+
+    public List<Project> byManager(long managerId) throws SQLException {
+        return projectDAO.findByManager(managerId);
+    }
+
+    public void assignManager(long projectId, long managerId) throws SQLException {
+        projectDAO.assignManager(projectId, managerId);
+    }
+
+
 }
