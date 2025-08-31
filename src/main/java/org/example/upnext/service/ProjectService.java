@@ -337,10 +337,8 @@ public class ProjectService {
     }
 
     public double calculateOverallProgress(long projectId) throws SQLException {
-        List<Task> tasks = taskDAO.findByProject(projectId);
-        if (tasks.isEmpty()) return 0.0;
-        double sum = tasks.stream().mapToDouble(Task::getProgressPct).sum();
-        return Math.round((sum / tasks.size()) * 100.0) / 100.0;
+        // Delegate the call to the DAO, which fetches the value calculated by the DB trigger/function
+        return projectDAO.getProjectProgress(projectId);
     }
 
     private static String roleOf(User u) {
@@ -361,6 +359,7 @@ public class ProjectService {
         }
         projectDAO.delete(projectId);
     }
+
 
     public boolean isManagerOfProject(long projectId, long userId) throws SQLException {
         // ENHANCED: Check multiple ways someone can be a manager

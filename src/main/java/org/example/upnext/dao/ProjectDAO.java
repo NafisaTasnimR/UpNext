@@ -17,5 +17,6 @@ public interface ProjectDAO {
     void updateStatus(long projectId, String status) throws SQLException;
     void assignManager(long projectId, long managerId) throws SQLException;
     java.util.List<org.example.upnext.model.Project> findByMember(long userId) throws java.sql.SQLException;
+    double getProjectProgress(long projectId) throws SQLException;
 }
 

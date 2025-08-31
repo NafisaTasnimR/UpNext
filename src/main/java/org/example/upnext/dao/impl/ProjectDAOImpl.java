@@ -11,7 +11,6 @@ import java.util.*;
 
 
 public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
-
     private Project map(ResultSet rs) throws SQLException {
         Project p = new Project();
         p.setProjectId(rs.getLong("PROJECT_ID"));
@@ -21,6 +20,7 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
         Date sd = rs.getDate("START_DATE"); if (sd != null) p.setStartDate(sd.toLocalDate());
         Date ed = rs.getDate("END_DATE");   if (ed != null) p.setEndDate(ed.toLocalDate());
         p.setStatus(rs.getString("STATUS"));
+        p.setProgressPct(rs.getDouble("PROGRESS_PCT"));
         return p;
     }
 
@@ -167,4 +167,25 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
             }
         }
     }
+
 }
+
+
+    @Override
+    public double getProjectProgress(long projectId) throws SQLException {
+        String sql = "SELECT PROGRESS_PCT FROM PROJECTS WHERE PROJECT_ID = ?";
+        try (Connection conn = getConn();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, projectId);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble("PROGRESS_PCT");
+            } else {
+                throw new SQLException("Project not found with ID: " + projectId);
+            }
+        }
+    }
+
+}
+
+
