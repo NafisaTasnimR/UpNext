@@ -59,23 +59,43 @@ public class DashboardController {
 
     @FXML
     private void onNewSubtask() {
-        if (currentUser == null) { statusLabel.setText("Not logged in"); return; }
+        if (currentUser == null) {
+            statusLabel.setText("Not logged in");
+            return;
+        }
+
         Project p = projectTable.getSelectionModel().getSelectedItem();
-        if (p == null) { statusLabel.setText("Select a project"); return; }
+        if (p == null) {
+            statusLabel.setText("Select a project");
+            return;
+        }
 
         Task parent = getSelectedTask();
-        if (parent == null) { statusLabel.setText("Select a parent task first"); return; }
+        if (parent == null) {
+            statusLabel.setText("Select a parent task first");
+            return;
+        }
 
         try {
-            boolean isAdmin   = "ADMIN".equalsIgnoreCase(currentUser.getGlobalRole());
+            // Validate subtask creation first - will throw detailed exception if blocked
+            taskService.validateSubtaskCreation(parent.getTaskId());
+
+            // Check user permissions
+            boolean isAdmin = "ADMIN".equalsIgnoreCase(currentUser.getGlobalRole());
             boolean isManager = projectService.isManagerOfProject(p.getProjectId(), currentUser.getUserId());
             boolean isParentAssignee = parent.getAssigneeId() != null &&
                     parent.getAssigneeId().equals(currentUser.getUserId());
+
             if (!isAdmin && !isManager && !isParentAssignee) {
-                statusLabel.setText("You can only create subtasks under tasks you own.");
+                showTaskCreationWarning("Permission Denied",
+                        "You can only create subtasks under tasks assigned to you.\n\n" +
+                                "Parent Task: " + parent.getTitle() + "\n" +
+                                "Assigned to: " + (parent.getAssigneeName() != null ? parent.getAssigneeName() : "Unassigned") + "\n" +
+                                "Your Role: " + currentUser.getGlobalRole());
                 return;
             }
 
+            // If validation passes, proceed with subtask creation
             var members = projectService.projectMembers(p.getProjectId());
 
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/SubtaskForm.fxml"));
@@ -85,14 +105,18 @@ public class DashboardController {
 
             Stage dlg = new Stage();
             dlg.initModality(Modality.APPLICATION_MODAL);
-            dlg.setTitle("New Subtask");
+            dlg.setTitle("New Subtask under: " + parent.getTitle());
             dlg.setScene(scene);
             dlg.showAndWait();
 
-            loadTasksForProject(p.getProjectId());  // refresh
+            loadTasksForProject(p.getProjectId());
 
+        } catch (SQLException ex) {
+            // Show detailed warning dialog for validation errors
+            showTaskCreationWarning("Cannot Create Subtask", ex.getMessage());
+            statusLabel.setText("Subtask creation blocked");
         } catch (Exception e) {
-            statusLabel.setText("Open subtask form failed: " + e.getMessage());
+            statusLabel.setText("Subtask creation failed: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -150,6 +174,7 @@ public class DashboardController {
       
         taskService.setActivityLogDAO(new ActivityLogDAOImpl());
         taskService.setProjectDAO(new ProjectDAOImpl());
+        taskService.setProjectService(projectService);
 
         taskTree.getColumns().setAll(tTitle, tStatus, tPrio, tProg, tAssignee , tPct );
 
@@ -323,17 +348,34 @@ public class DashboardController {
     public void onEditProject() {
         Project p = projectTable.getSelectionModel().getSelectedItem();
         if (p == null) { statusLabel.setText("Select a project to edit"); return; }
+
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/ProjectForm.fxml"));
             Scene scene = new Scene(loader.load());
             ProjectFormController ctrl = loader.getController();
             ctrl.initForEdit(currentUser, p, updated -> {
                 loadProjects();
-                statusLabel.setText("Project updated: " + updated.getName());
+                // Refresh tasks if the project status changed
+                try {
+                    if (!p.getStatus().equals(updated.getStatus())) {
+                        loadTasksForProject(updated.getProjectId());
+                        statusLabel.setText("Project updated: " + updated.getName() +
+                                " (Status: " + updated.getStatus() + ")");
+                    } else {
+                        statusLabel.setText("Project updated: " + updated.getName());
+                    }
+                } catch (SQLException e) {
+                    statusLabel.setText("Project updated but task refresh failed: " + e.getMessage());
+                }
             });
-            Stage dlg = new Stage(); dlg.initModality(Modality.APPLICATION_MODAL);
-            dlg.setTitle("Edit Project"); dlg.setScene(scene); dlg.showAndWait();
-        } catch (Exception ex) { statusLabel.setText("Edit failed: " + ex.getMessage()); }
+            Stage dlg = new Stage();
+            dlg.initModality(Modality.APPLICATION_MODAL);
+            dlg.setTitle("Edit Project");
+            dlg.setScene(scene);
+            dlg.showAndWait();
+        } catch (Exception ex) {
+            statusLabel.setText("Edit failed: " + ex.getMessage());
+        }
     }
 
     @FXML
@@ -363,26 +405,52 @@ public class DashboardController {
     @FXML
     public void onNewTask() {
         Project p = projectTable.getSelectionModel().getSelectedItem();
-        if (p == null) { statusLabel.setText("Open a project first"); return; }
+        if (p == null) {
+            statusLabel.setText("Open a project first");
+            return;
+        }
+
         try {
+            // Validate before opening form - will throw detailed exception if blocked
+            taskService.validateTaskCreation(p.getProjectId());
+
+            // If validation passes, open the form
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/TaskForm.fxml"));
             Scene scene = new Scene(loader.load());
             TaskFormController ctrl = loader.getController();
             ctrl.initForCreate(p.getProjectId(), savedId -> {
                 try {
                     loadTasksForProject(p.getProjectId());
+                    statusLabel.setText("Task created with ID: " + savedId);
                 } catch (SQLException e) {
                     throw new RuntimeException(e);
                 }
-                statusLabel.setText("Task created: " + savedId);
             });
-            Stage dlg = new Stage(); dlg.initModality(Modality.APPLICATION_MODAL);
-            dlg.setTitle("New Task"); dlg.setScene(scene); dlg.showAndWait();
-        } catch (Exception ex) { statusLabel.setText("Open task form failed: " + ex.getMessage()); }
+            Stage dlg = new Stage();
+            dlg.initModality(Modality.APPLICATION_MODAL);
+            dlg.setTitle("New Task");
+            dlg.setScene(scene);
+            dlg.showAndWait();
+
+        } catch (SQLException ex) {
+            // Show detailed warning dialog instead of just status message
+            showTaskCreationWarning("Cannot Create Task", ex.getMessage());
+            statusLabel.setText("Task creation blocked");
+        } catch (Exception ex) {
+            statusLabel.setText("Task creation failed: " + ex.getMessage());
+        }
     }
 
-
-
+    private void showTaskCreationWarning(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.getDialogPane().setMinWidth(450);
+        //alert.getDialogPane().setGraphic(true);
+        alert.setResizable(true);
+        alert.showAndWait();
+    }
 
     @FXML
     public void onStartTask() {

@@ -14,6 +14,7 @@ public interface ProjectDAO {
     void update(Project p) throws SQLException;
     void delete(long id) throws SQLException;
     List<Project> findByManager(long managerId) throws SQLException;
+    void updateStatus(long projectId, String status) throws SQLException;
     void assignManager(long projectId, long managerId) throws SQLException;
     java.util.List<org.example.upnext.model.Project> findByMember(long userId) throws java.sql.SQLException;
 }

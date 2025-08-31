@@ -1,0 +1,101 @@
+-- Trigger to automatically update project status based on start date
+CREATE OR REPLACE TRIGGER TRG_PROJECT_STATUS_AUTO
+BEFORE INSERT OR UPDATE ON PROJECTS
+FOR EACH ROW
+DECLARE
+  v_today DATE := TRUNC(SYSDATE);
+BEGIN
+  -- Auto-set status on INSERT based on start date
+  IF INSERTING THEN
+    IF :NEW.STATUS IS NULL THEN
+      IF :NEW.START_DATE IS NOT NULL AND v_today < TRUNC(:NEW.START_DATE) THEN
+        :NEW.STATUS := 'PLANNING';
+      ELSE
+        :NEW.STATUS := 'ACTIVE';
+      END IF;
+    END IF;
+  END IF;
+
+  -- Auto-transition from PLANNING to ACTIVE when start date passes
+  IF UPDATING THEN
+    IF :NEW.STATUS = 'PLANNING' AND :NEW.START_DATE IS NOT NULL
+       AND v_today >= TRUNC(:NEW.START_DATE) THEN
+      :NEW.STATUS := 'ACTIVE';
+    END IF;
+  END IF;
+END;
+/
+
+-- Trigger to update task statuses when project status changes
+CREATE OR REPLACE TRIGGER TRG_PROJECT_STATUS_CASCADE
+AFTER UPDATE OF STATUS ON PROJECTS
+FOR EACH ROW
+BEGIN
+  -- Only update if status actually changed
+  IF :NEW.STATUS <> :OLD.STATUS THEN
+    -- Update task statuses based on new project status
+    CASE :NEW.STATUS
+      WHEN 'PLANNING' THEN
+        UPDATE TASKS
+        SET STATUS = 'TODO', UPDATED_AT = SYSTIMESTAMP
+        WHERE PROJECT_ID = :NEW.PROJECT_ID
+          AND STATUS NOT IN ('DONE', 'CANCELLED');
+
+      WHEN 'ACTIVE' THEN
+        -- For ACTIVE, set status based on task dates
+        UPDATE TASKS
+        SET STATUS = CASE
+                       WHEN START_DATE IS NOT NULL AND TRUNC(SYSDATE) >= TRUNC(START_DATE) THEN 'IN_PROGRESS'
+                       WHEN START_DATE IS NOT NULL AND TRUNC(SYSDATE) < TRUNC(START_DATE) THEN 'TODO'
+                       ELSE 'TODO'
+                     END,
+            UPDATED_AT = SYSTIMESTAMP
+        WHERE PROJECT_ID = :NEW.PROJECT_ID
+          AND STATUS NOT IN ('DONE', 'CANCELLED');
+
+      WHEN 'ON_HOLD' THEN
+        UPDATE TASKS
+        SET STATUS = 'ON_HOLD', UPDATED_AT = SYSTIMESTAMP
+        WHERE PROJECT_ID = :NEW.PROJECT_ID
+          AND STATUS NOT IN ('DONE', 'CANCELLED');
+
+      WHEN 'CANCELLED' THEN
+        UPDATE TASKS
+        SET STATUS = 'BLOCKED', UPDATED_AT = SYSTIMESTAMP
+        WHERE PROJECT_ID = :NEW.PROJECT_ID
+          AND STATUS NOT IN ('DONE', 'CANCELLED');
+
+      ELSE
+        -- For COMPLETED, don't force status changes
+        NULL;
+    END CASE;
+  END IF;
+END;
+/
+
+-- Enhanced task completion trigger that auto-completes projects
+CREATE OR REPLACE TRIGGER TRG_TASK_PROJECT_COMPLETION
+AFTER UPDATE OF STATUS ON TASKS
+FOR EACH ROW
+WHEN (NEW.STATUS = 'DONE' AND OLD.STATUS <> 'DONE')
+DECLARE
+  v_incomplete_count NUMBER;
+  v_project_status VARCHAR2(20);
+BEGIN
+  -- Check if all tasks in the project are now complete
+  SELECT COUNT(*), MAX(p.STATUS)
+  INTO v_incomplete_count, v_project_status
+  FROM TASKS t
+  JOIN PROJECTS p ON p.PROJECT_ID = t.PROJECT_ID
+  WHERE t.PROJECT_ID = :NEW.PROJECT_ID
+    AND t.STATUS NOT IN ('DONE', 'CANCELLED')
+    AND p.PROJECT_ID = :NEW.PROJECT_ID;
+
+  -- If no incomplete tasks remain and project isn't already completed
+  IF v_incomplete_count = 0 AND v_project_status <> 'COMPLETED' THEN
+    UPDATE PROJECTS
+    SET STATUS = 'COMPLETED', UPDATED_AT = SYSTIMESTAMP
+    WHERE PROJECT_ID = :NEW.PROJECT_ID;
+  END IF;
+END;
+/

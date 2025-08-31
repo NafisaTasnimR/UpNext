@@ -120,6 +120,20 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
     }
 
     @Override
+    public void updateStatus(long projectId, String status) throws SQLException {
+        String sql = "UPDATE PROJECTS SET STATUS = ?, UPDATED_AT = SYSTIMESTAMP WHERE PROJECT_ID = ?";
+
+        try (Connection conn = getConn(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, status);
+            ps.setLong(2, projectId);
+            int rowsUpdated = ps.executeUpdate();
+            if (rowsUpdated == 0) {
+                throw new SQLException("No project found with ID " + projectId);
+            }
+        }
+    }
+
+    @Override
     public void assignManager(long projectId, long managerId) throws SQLException {
         String sql = "UPDATE PROJECTS SET ASSIGNED_MANAGER_ID=? WHERE PROJECT_ID=?";
         try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
