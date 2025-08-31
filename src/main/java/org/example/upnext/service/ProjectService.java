@@ -360,7 +360,6 @@ public class ProjectService {
         projectDAO.delete(projectId);
     }
 
-
     public boolean isManagerOfProject(long projectId, long userId) throws SQLException {
         // ENHANCED: Check multiple ways someone can be a manager
         Optional<Project> projectOpt = projectDAO.findById(projectId);
