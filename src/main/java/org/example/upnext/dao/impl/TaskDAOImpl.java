@@ -1,11 +1,13 @@
 package org.example.upnext.dao.impl;
 
+import org.example.upnext.config.Db;
 import org.example.upnext.dao.BaseDAO;
 import org.example.upnext.dao.TaskDAO;
 import org.example.upnext.model.Task;
 
 import java.sql.*;
 import java.sql.Date;
+import java.time.LocalDate;
 import java.util.*;
 
 
@@ -28,8 +30,29 @@ public class TaskDAOImpl extends BaseDAO implements TaskDAO {
         double ah = rs.getDouble("ACTUAL_HOURS");    if (!rs.wasNull()) t.setActualHours(ah);
         t.setBlocked("Y".equals(rs.getString("IS_BLOCKED")));
         t.setAssigneeName(rs.getString("assignee_name"));
-
         return t;
+    }
+
+    @Override
+    public List<Task> findTasksDueOn(LocalDate date) throws SQLException {
+        String sql = """
+        SELECT t.*,
+               u.username AS assignee_name
+        FROM TASKS t
+        LEFT JOIN USERS u ON t.ASSIGNEE_ID = u.USER_ID
+        WHERE t.DUE_DATE = ? AND t.STATUS NOT IN ('DONE', 'CANCELLED')
+        """;
+        try (Connection c = Db.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setDate(1, java.sql.Date.valueOf(date));
+            try (ResultSet rs = ps.executeQuery()) {
+                List<Task> tasks = new ArrayList<>();
+                while (rs.next()) {
+                    tasks.add(map(rs)); // This will work now
+                }
+                return tasks;
+            }
+        }
     }
 
     @Override
