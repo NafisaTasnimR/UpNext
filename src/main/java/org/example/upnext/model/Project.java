@@ -15,6 +15,7 @@ public class Project {
     private String status; // PLANNING, ACTIVE, ON_HOLD, COMPLETED, CANCELLED
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
+    private double progressPct; // Add this field
 
     public Project() {}
     public Project(Long projectId, String name, String description, Long ownerId) {
@@ -95,4 +96,11 @@ public class Project {
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
+    public double getProgressPct() {
+        return progressPct;
+    }
+    public void setProgressPct(double progressPct) {
+        this.progressPct = progressPct;
+    }
+
 }
