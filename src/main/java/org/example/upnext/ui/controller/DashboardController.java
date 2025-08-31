@@ -186,17 +186,8 @@ public class DashboardController {
         nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
         TableColumn<Project, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
-        // +++ ADD THIS NEW COLUMN +++
-        TableColumn<Project, Double> progressCol = new TableColumn<>("Progress");
-        progressCol.setCellValueFactory(new PropertyValueFactory<>("progressPct"));
-        progressCol.setCellFactory(column -> new TableCell<Project, Double>() {
-            @Override
-            protected void updateItem(Double progress, boolean empty) {
-                super.updateItem(progress, empty);
-                setText(empty ? "" : String.format("%.1f%%", progress));
-            }
-        });
-        projectTable.getColumns().setAll(nameCol, statusCol, progressCol);
+
+        projectTable.getColumns().setAll(nameCol, statusCol);
 
         // Tasks tree columns (title, status, priority, progress, assignee)
         TreeTableColumn<Task, String> tTitle = new TreeTableColumn<>("Title");
@@ -526,16 +517,21 @@ public class DashboardController {
         } catch (SQLException e) { statusLabel.setText(e.getMessage()); }
     }
 
-
     @FXML
     public void onCompleteTask() {
         Task selected = getSelectedTask();
-        if (selected == null) { statusLabel.setText("Select a task"); return; }
+        if (selected == null) {
+            statusLabel.setText("Select a task");
+            return;
+        }
         try {
             taskService.complete(selected.getTaskId());
             reloadSelectedProjectTasks();
+            loadProjects();
             statusLabel.setText("Task completed");
-        } catch (SQLException e) { statusLabel.setText(e.getMessage()); }
+        } catch (SQLException e) {
+            statusLabel.setText(e.getMessage());
+        }
     }
 
     @FXML
