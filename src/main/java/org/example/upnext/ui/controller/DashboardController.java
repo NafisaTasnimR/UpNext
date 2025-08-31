@@ -1,5 +1,8 @@
 package org.example.upnext.ui.controller;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
+import javafx.util.Duration;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -35,6 +38,8 @@ public class DashboardController {
     @FXML private Button assignMembersBtn;  // Manager-only
     @FXML private Button assignTaskBtn;     // Manager-only
     @FXML private Button newSubtaskBtn;
+
+    private Timeline poller;
 
     private final ProjectService projectService =
             new ProjectService(new ProjectDAOImpl(), new TaskDAOImpl());
@@ -113,7 +118,17 @@ public class DashboardController {
         nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
         TableColumn<Project, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
-        projectTable.getColumns().setAll(nameCol, statusCol);
+        // +++ ADD THIS NEW COLUMN +++
+        TableColumn<Project, Double> progressCol = new TableColumn<>("Progress");
+        progressCol.setCellValueFactory(new PropertyValueFactory<>("progressPct"));
+        progressCol.setCellFactory(column -> new TableCell<Project, Double>() {
+            @Override
+            protected void updateItem(Double progress, boolean empty) {
+                super.updateItem(progress, empty);
+                setText(empty ? "" : String.format("%.1f%%", progress));
+            }
+        });
+        projectTable.getColumns().setAll(nameCol, statusCol, progressCol);
 
         // Tasks tree columns (title, status, priority, progress, assignee)
         TreeTableColumn<Task, String> tTitle = new TreeTableColumn<>("Title");
@@ -164,6 +179,10 @@ public class DashboardController {
                 taskTree.setRoot(null);
             }
         });
+
+        wireAssignButton();
+        wireNewSubtaskButton();
+
     }
 
     private void applyRoleUI() {
@@ -525,6 +544,9 @@ public class DashboardController {
             }
         });
     }
+
+    // ... existing initialize code ...
+
 
 }
 
