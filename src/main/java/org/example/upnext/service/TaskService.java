@@ -314,6 +314,7 @@ public class TaskService {
         if (projectService != null) {
             projectService.updateProjectStatusAutomatically(task.getProjectId());
         }
+
     }
 
     public void setProgress(long taskId, double pct) throws SQLException {
