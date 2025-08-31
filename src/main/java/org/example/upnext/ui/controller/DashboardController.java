@@ -472,12 +472,37 @@ public class DashboardController {
     @FXML
     public void onStartTask() {
         Task selected = getSelectedTask();
-        if (selected == null) { statusLabel.setText("Select a task"); return; }
+        if (selected == null) {
+            statusLabel.setText("Select a task");
+            return;
+        }
         try {
             taskService.start(selected.getTaskId());
             reloadSelectedProjectTasks();
             statusLabel.setText("Task started");
-        } catch (SQLException e) { statusLabel.setText(e.getMessage()); }
+        } catch (SQLException e) {
+            // Show warning dialog instead of status label
+            showWarningDialog("Cannot Start Task", e.getMessage());
+            statusLabel.setText("Task start blocked by priority rules");
+        }
+    }
+
+    // Add this helper method to DashboardController
+    private void showWarningDialog(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle(title);
+        alert.setHeaderText("Priority Rule Violation");
+        alert.setContentText(message);
+
+        // Make dialog larger to fit the task list
+        alert.getDialogPane().setMinWidth(500);
+        alert.getDialogPane().setMinHeight(200);
+
+        // Add OK button
+        alert.getButtonTypes().setAll(ButtonType.OK);
+
+        // Show and wait for user to click OK
+        alert.showAndWait();
     }
 
 

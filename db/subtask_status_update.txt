@@ -1,0 +1,213 @@
+ALTER TABLE PROJECTS ADD (PROGRESS_PCT NUMBER(5,2) DEFAULT 0);
+
+
+
+CREATE OR REPLACE TRIGGER TRG_UPDATE_TASK_PROGRESS
+FOR UPDATE OF STATUS ON TASKS
+COMPOUND TRIGGER
+
+    -- Type to store information about updated tasks
+    TYPE TaskRec IS RECORD (
+        task_id NUMBER,
+        new_status TASKS.STATUS%TYPE,
+        parent_task_id NUMBER
+    );
+    TYPE TaskTable IS TABLE OF TaskRec INDEX BY PLS_INTEGER;
+    g_updated_tasks TaskTable;
+
+    -- This section runs once per row
+    AFTER EACH ROW IS
+    BEGIN
+        -- Store information about each updated task
+        g_updated_tasks(g_updated_tasks.COUNT + 1).task_id := :NEW.TASK_ID;
+        g_updated_tasks(g_updated_tasks.COUNT).new_status := :NEW.STATUS;
+        g_updated_tasks(g_updated_tasks.COUNT).parent_task_id := :NEW.PARENT_TASK_ID;
+    END AFTER EACH ROW;
+
+    -- This section runs once per statement, after all rows are processed
+    AFTER STATEMENT IS
+    BEGIN
+        -- Process all updated tasks
+        FOR i IN 1 .. g_updated_tasks.COUNT LOOP
+            DECLARE
+                v_task_rec TaskRec := g_updated_tasks(i);
+                v_avg_progress NUMBER;
+            BEGIN
+                -- Handle the current task's progress
+                IF v_task_rec.new_status = 'IN_PROGRESS' THEN
+                    -- Recalculate progress based on subtasks (safe to query now)
+                    SELECT AVG(PROGRESS_PCT) INTO v_avg_progress 
+                    FROM TASKS 
+                    WHERE PARENT_TASK_ID = v_task_rec.task_id;
+                    
+                    UPDATE TASKS
+                    SET PROGRESS_PCT = NVL(v_avg_progress, 0)
+                    WHERE TASK_ID = v_task_rec.task_id;
+                    
+                ELSIF v_task_rec.new_status = 'DONE' THEN
+                    -- Set progress to 100% if the task is completed
+                    UPDATE TASKS
+                    SET PROGRESS_PCT = 100
+                    WHERE TASK_ID = v_task_rec.task_id;
+                END IF;
+
+                -- After task update, recalculate progress for parent task
+                IF v_task_rec.parent_task_id IS NOT NULL THEN
+                    -- Roll up progress to parent task (safe to query now)
+                    SELECT AVG(PROGRESS_PCT) INTO v_avg_progress 
+                    FROM TASKS 
+                    WHERE PARENT_TASK_ID = v_task_rec.parent_task_id;
+                    
+                    UPDATE TASKS
+                    SET PROGRESS_PCT = NVL(v_avg_progress, 0)
+                    WHERE TASK_ID = v_task_rec.parent_task_id;
+                END IF;
+                
+            EXCEPTION
+                WHEN OTHERS THEN
+                    -- Handle exceptions for individual tasks without failing the entire trigger
+                    NULL; -- Consider logging this error for debugging
+            END;
+        END LOOP;
+    END AFTER STATEMENT;
+
+END TRG_UPDATE_TASK_PROGRESS;
+/
+
+
+
+
+
+CREATE OR REPLACE TRIGGER TRG_TASKS_CHECK_DEPS
+FOR UPDATE OF STATUS ON TASKS
+COMPOUND TRIGGER
+
+    -- Type to store task IDs that are being updated to a state we care about
+    TYPE TaskIdRec IS RECORD (
+        task_id NUMBER,
+        new_status TASKS.STATUS%TYPE
+    );
+    TYPE TaskIdTable IS TABLE OF TaskIdRec INDEX BY PLS_INTEGER;
+    g_updated_tasks TaskIdTable;
+
+    -- This section runs once per row
+    AFTER EACH ROW IS
+    BEGIN
+        -- Only care about rows being updated to IN_PROGRESS or DONE
+        IF :NEW.STATUS IN ('IN_PROGRESS', 'DONE') THEN
+            g_updated_tasks(g_updated_tasks.COUNT + 1).task_id := :NEW.TASK_ID;
+            g_updated_tasks(g_updated_tasks.COUNT).new_status := :NEW.STATUS;
+        END IF;
+    END AFTER EACH ROW;
+
+    -- This section runs once per statement, after all rows are processed
+    AFTER STATEMENT IS
+        v_unfinished NUMBER;
+    BEGIN
+        -- Loop through all tasks that were updated to IN_PROGRESS or DONE
+        FOR i IN 1 .. g_updated_tasks.COUNT LOOP
+            -- Check dependencies for each task
+            SELECT COUNT(*)
+            INTO v_unfinished
+            FROM TASK_DEPENDENCIES D
+            JOIN TASKS P ON P.TASK_ID = D.PREDECESSOR_TASK_ID
+            WHERE D.SUCCESSOR_TASK_ID = g_updated_tasks(i).task_id
+            AND P.STATUS <> 'DONE';
+
+            -- If unfinished dependencies exist, raise an error
+            IF v_unfinished > 0 THEN
+                RAISE_APPLICATION_ERROR(-20001,
+                    'Task ID ' || g_updated_tasks(i).task_id ||
+                    ' has unfinished dependencies and cannot be set to ' || g_updated_tasks(i).new_status);
+            END IF;
+        END LOOP;
+    END AFTER STATEMENT;
+
+END TRG_TASKS_CHECK_DEPS;
+/
+
+
+
+
+
+CREATE OR REPLACE FUNCTION CALCULATE_PROJECT_PROGRESS(p_project_id IN NUMBER) RETURN NUMBER IS
+    v_total_tasks NUMBER;
+    v_completed_tasks NUMBER;
+    v_project_progress NUMBER := 0;
+    v_project_status PROJECTS.STATUS%TYPE;
+BEGIN
+    -- First, check the project's status. Only calculate if ACTIVE.
+    SELECT STATUS INTO v_project_status FROM PROJECTS WHERE PROJECT_ID = p_project_id;
+
+    IF v_project_status != 'ACTIVE' THEN
+        -- If project is not ACTIVE, return current progress without recalculation
+        SELECT NVL(PROGRESS_PCT, 0) INTO v_project_progress FROM PROJECTS WHERE PROJECT_ID = p_project_id;
+        RETURN v_project_progress;
+    END IF;
+
+    -- Calculate progress based on all MAIN tasks (excluding subtasks)
+    -- The progress of a parent task is already an aggregate of its subtasks (handled by application/other triggers)
+    SELECT COUNT(*), COALESCE(SUM(PROGRESS_PCT), 0)
+    INTO v_total_tasks, v_project_progress
+    FROM TASKS
+    WHERE PROJECT_ID = p_project_id
+    AND PARENT_TASK_ID IS NULL; -- Only consider top-level tasks
+
+    -- Avoid division by zero
+    IF v_total_tasks > 0 THEN
+        v_project_progress := ROUND(v_project_progress / v_total_tasks, 2);
+    ELSE
+        v_project_progress := 0;
+    END IF;
+
+    -- If progress reaches 100%, automatically set project status to COMPLETED
+    IF v_project_progress = 100 AND v_project_status != 'COMPLETED' THEN
+        UPDATE PROJECTS SET STATUS = 'COMPLETED', PROGRESS_PCT = 100 WHERE PROJECT_ID = p_project_id;
+    END IF;
+
+    RETURN v_project_progress;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN 0;
+    WHEN OTHERS THEN
+        RAISE;
+END CALCULATE_PROJECT_PROGRESS;
+/
+
+
+
+CREATE OR REPLACE TRIGGER TRG_TASK_UPDATE_PROJECT_PROGRESS
+AFTER INSERT OR UPDATE OF PROGRESS_PCT, STATUS, PARENT_TASK_ID ON TASKS
+FOR EACH ROW
+DECLARE
+    v_new_project_progress NUMBER;
+BEGIN
+    -- Recalculate project progress if the task's project is affected
+    -- If this is a new task being inserted into a project
+    IF INSERTING THEN
+        v_new_project_progress := CALCULATE_PROJECT_PROGRESS(:NEW.PROJECT_ID);
+        UPDATE PROJECTS SET PROGRESS_PCT = v_new_project_progress WHERE PROJECT_ID = :NEW.PROJECT_ID;
+    END IF;
+
+    -- If a task was updated (progress, status, or moved to a different project/parent)
+    IF UPDATING THEN
+        -- If the task's project changed, update both the old and new projects
+        IF :OLD.PROJECT_ID != :NEW.PROJECT_ID THEN
+            v_new_project_progress := CALCULATE_PROJECT_PROGRESS(:OLD.PROJECT_ID);
+            UPDATE PROJECTS SET PROGRESS_PCT = v_new_project_progress WHERE PROJECT_ID = :OLD.PROJECT_ID;
+
+            v_new_project_progress := CALCULATE_PROJECT_PROGRESS(:NEW.PROJECT_ID);
+            UPDATE PROJECTS SET PROGRESS_PCT = v_new_project_progress WHERE PROJECT_ID = :NEW.PROJECT_ID;
+        ELSE
+            -- Task is in the same project, just recalc that one project
+            v_new_project_progress := CALCULATE_PROJECT_PROGRESS(:NEW.PROJECT_ID);
+            UPDATE PROJECTS SET PROGRESS_PCT = v_new_project_progress WHERE PROJECT_ID = :NEW.PROJECT_ID;
+        END IF;
+    END IF;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        -- It's often best to log errors here instead of failing the transaction
+        NULL;
+END;
+/

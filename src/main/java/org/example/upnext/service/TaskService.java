@@ -459,19 +459,27 @@ public class TaskService {
     public void start(long taskId) throws SQLException {
         if (!canStartTask(taskId)) {
             Task task = get(taskId);
-
-            // Get the specific blocking tasks using DAO
             List<Task> blockingTasks = depDAO.getHigherPriorityUnfinishedTasks(
                     taskId,
                     task.getParentTaskId(),
                     task.getPriority()
             );
 
-            StringBuilder errorMessage = new StringBuilder("Cannot start task. Complete these higher priority tasks first:\n");
+            StringBuilder errorMessage = new StringBuilder();
+            errorMessage.append("You must complete these higher priority tasks first:\n\n");
+
             for (Task blockingTask : blockingTasks) {
-                errorMessage.append("- ").append(blockingTask.getTitle())
-                        .append(" (").append(blockingTask.getPriority()).append(")\n");
+                errorMessage.append("• ").append(blockingTask.getTitle())
+                        .append(" (").append(blockingTask.getPriority()).append(")");
+
+                // Add assignee info if available
+                if (blockingTask.getAssigneeName() != null) {
+                    errorMessage.append(" - Assigned to: ").append(blockingTask.getAssigneeName());
+                }
+                errorMessage.append("\n");
             }
+
+            errorMessage.append("\nComplete these tasks before starting: ").append(task.getTitle());
 
             throw new SQLException(errorMessage.toString());
         }
