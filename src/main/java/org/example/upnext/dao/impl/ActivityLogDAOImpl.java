@@ -48,5 +48,36 @@ public class ActivityLogDAOImpl extends BaseDAO implements ActivityLogDAO {
             }
         }
     }
+    // ========= add inside ActivityLogDAOImpl =========
+
+    // Generic helper: first INSERT log => creator
+    private Optional<String> firstInsertActor(String entityType, long entityId) throws SQLException {
+        final String sql =
+                "SELECT PERFORMED_BY " +
+                        "FROM (SELECT PERFORMED_BY, OCCURRED_AT " +
+                        "        FROM ACTIVITY_LOGS " +
+                        "       WHERE ENTITY_TYPE = ? AND ENTITY_ID = ? AND ACTION = 'INSERT' " +
+                        "       ORDER BY OCCURRED_AT) " +
+                        "WHERE ROWNUM = 1";
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, entityType);
+            ps.setLong(2, entityId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.ofNullable(rs.getString(1)) : Optional.empty();
+            }
+        }
+    }
+
+    @Override
+    public Optional<String> findProjectCreator(long projectId) throws SQLException {
+        return firstInsertActor("PROJECT", projectId);
+    }
+
+    @Override
+    public Optional<String> findTaskCreator(long taskId) throws SQLException {
+        return firstInsertActor("TASK", taskId);
+    }
+// ========= end add =========
+
 }
 

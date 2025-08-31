@@ -84,9 +84,13 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
         }
     }
 
-    @Override public void delete(long id) throws SQLException {
-        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement("DELETE FROM PROJECTS WHERE PROJECT_ID=?")) {
-            ps.setLong(1, id); ps.executeUpdate();
+    @Override
+    public void delete(long projectId) throws SQLException {
+        try (Connection c = getConn();
+             PreparedStatement p = c.prepareStatement(
+                     "DELETE FROM PROJECTS WHERE PROJECT_ID=?")) {
+            p.setLong(1, projectId);
+            p.executeUpdate();
         }
     }
 
@@ -140,7 +144,6 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
             }
         }
     }
-
 
 }
 

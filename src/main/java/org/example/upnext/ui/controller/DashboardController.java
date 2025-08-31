@@ -9,6 +9,9 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.TreeItem;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import org.example.upnext.auth.AuthContext;
+import org.example.upnext.dao.impl.ProjectDAOImpl;
+import org.example.upnext.dao.impl.ActivityLogDAOImpl;
 import org.example.upnext.dao.impl.ProjectDAOImpl;
 import org.example.upnext.dao.impl.TaskDAOImpl;
 import org.example.upnext.model.Project;
@@ -40,7 +43,14 @@ public class DashboardController {
 
     private User currentUser;
 
+    {
+        // Inject ActivityLogDAO so TaskService can check creators
+        taskService.setActivityLogDAO(new ActivityLogDAOImpl());
+    }
+
+
     public void setCurrentUser(User u) {
+        AuthContext.setUsername(u.getUsername());
         this.currentUser = u;
         statusLabel.setText("Logged in as: " + u.getUsername());
         applyRoleUI();
@@ -137,6 +147,9 @@ public class DashboardController {
         TreeTableColumn<Task, String> tAssignee = new TreeTableColumn<>("Assigned to");
         tAssignee.setCellValueFactory(p -> new javafx.beans.property.SimpleStringProperty(
                 p.getValue().getValue().getAssigneeName() == null ? "" : p.getValue().getValue().getAssigneeName()));
+      
+        taskService.setActivityLogDAO(new ActivityLogDAOImpl());
+        taskService.setProjectDAO(new ProjectDAOImpl());
 
         taskTree.getColumns().setAll(tTitle, tStatus, tPrio, tProg, tAssignee , tPct );
 
@@ -327,14 +340,25 @@ public class DashboardController {
     public void onDeleteProject() {
         Project p = projectTable.getSelectionModel().getSelectedItem();
         if (p == null) { statusLabel.setText("Select a project to delete"); return; }
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION, "Delete project \"" + p.getName() + "\"?", ButtonType.YES, ButtonType.NO);
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                "Delete project \"" + p.getName() + "\"?\nAll tasks, subtasks and logs will be removed.",
+                ButtonType.YES, ButtonType.NO);
         confirm.showAndWait().ifPresent(bt -> {
             if (bt == ButtonType.YES) {
-                try { projectService.delete(p.getProjectId()); loadProjects(); taskTree.setRoot(null); }
-                catch (SQLException e) { statusLabel.setText("Delete failed: " + e.getMessage()); }
+                try {
+                    projectService.deleteProjectWithAuth(p.getProjectId(), currentUser);
+                    loadProjects();
+                    taskTree.setRoot(null);
+                    statusLabel.setText("Project deleted.");
+                } catch (SecurityException se) {
+                    new Alert(Alert.AlertType.WARNING, se.getMessage()).showAndWait();
+                } catch (SQLException e) {
+                    new Alert(Alert.AlertType.ERROR, "Delete failed: " + e.getMessage()).showAndWait();
+                }
             }
         });
     }
+
 
     @FXML
     public void onNewTask() {
@@ -405,7 +429,6 @@ public class DashboardController {
 
         Task task = getSelectedTask();
         if (task == null) { statusLabel.setText("Select a task to assign"); return; }
-
         try {
             boolean isAdmin = "ADMIN".equalsIgnoreCase(currentUser.getGlobalRole());
             boolean isGlobalManager = "MANAGER".equalsIgnoreCase(currentUser.getGlobalRole());
@@ -462,12 +485,12 @@ public class DashboardController {
         return t;
     }
 
-
     @FXML
     private void onLogout() {
         try {
             this.currentUser = null;
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/LoginView.fxml"));
+            AuthContext.clear();
             Scene scene = new Scene(loader.load(), 920, 600);
             Stage stage = (Stage) projectTable.getScene().getWindow();
             stage.setScene(scene);
@@ -477,5 +500,31 @@ public class DashboardController {
             statusLabel.setText("Logout failed: " + e.getMessage());
         }
     }
+    @FXML
+    public void onDeleteTask() {
+        var sel = taskTree.getSelectionModel().getSelectedItem();
+        Task t = (sel == null ? null : sel.getValue());
+        if (t == null) { statusLabel.setText("Select a task to delete"); return; }
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                "Delete \"" + t.getTitle() + "\" and all its subtasks?",
+                ButtonType.YES, ButtonType.NO);
+        confirm.showAndWait().ifPresent(bt -> {
+            if (bt == ButtonType.YES) {
+                try {
+                    taskService.deleteTaskWithAuth(t.getTaskId(), currentUser);
+                    // refresh current project's tree
+                    Project p = projectTable.getSelectionModel().getSelectedItem();
+                    if (p != null) loadTasksForProject(p.getProjectId());
+                    statusLabel.setText("Task deleted.");
+                } catch (SecurityException se) {
+                    new Alert(Alert.AlertType.WARNING, se.getMessage()).showAndWait();
+                } catch (SQLException e) {
+                    new Alert(Alert.AlertType.ERROR, "Delete failed: " + e.getMessage()).showAndWait();
+                }
+            }
+        });
+    }
+
 }
 

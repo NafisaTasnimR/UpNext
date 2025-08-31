@@ -85,9 +85,30 @@ public class TaskDAOImpl extends BaseDAO implements TaskDAO {
         }
     }
 
-    @Override public void delete(long taskId) throws SQLException {
-        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement("DELETE FROM TASKS WHERE TASK_ID=?")) {
-            ps.setLong(1, taskId); ps.executeUpdate();
+    @Override
+    public void delete(long taskId) throws SQLException {
+        final String subtree = """
+        SELECT TASK_ID FROM TASKS
+         START WITH TASK_ID = ?
+         CONNECT BY PRIOR TASK_ID = PARENT_TASK_ID
+    """;
+
+        try (Connection c = getConn()) {
+            c.setAutoCommit(false);
+            try {
+                // With your FKs on CASCADE, one delete over the subtree is enough.
+                try (PreparedStatement p = c.prepareStatement(
+                        "DELETE FROM TASKS WHERE TASK_ID IN (" + subtree + ")")) {
+                    p.setLong(1, taskId);
+                    p.executeUpdate();
+                }
+                c.commit();
+            } catch (SQLException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(true);
+            }
         }
     }
 
