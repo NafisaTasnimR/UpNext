@@ -344,6 +344,7 @@ BEGIN
 END;
 /
 
+
 DROP TRIGGER UPNEXT.TRG_TASKS_CHECK_DEPS;
 
 -- (Optional) prevent setting PROGRESS_PCT to 100 unless status DONE
@@ -653,6 +654,7 @@ BEGIN
 END;
 /
 
+
 commit;
 --------------------------------------------------------------------------------
 -- End of schema
@@ -753,3 +755,8 @@ WHERE TABLE_NAME = 'TASKS';
 
 DROP TRIGGER UPNEXT.TRG_ROLLUP_PARENT_DONE;
 commit;
+
+--------------------------------------------------------------------------------
+-- End of schema
+--------------------------------------------------------------------------------
+
