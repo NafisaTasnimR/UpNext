@@ -13,10 +13,8 @@ import javafx.scene.control.TreeItem;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.example.upnext.auth.AuthContext;
+import org.example.upnext.dao.impl.*;
 import org.example.upnext.dao.impl.ProjectDAOImpl;
-import org.example.upnext.dao.impl.ActivityLogDAOImpl;
-import org.example.upnext.dao.impl.ProjectDAOImpl;
-import org.example.upnext.dao.impl.TaskDAOImpl;
 import org.example.upnext.model.Project;
 import org.example.upnext.model.Task;
 import org.example.upnext.model.User;
@@ -44,7 +42,7 @@ public class DashboardController {
     private final ProjectService projectService =
             new ProjectService(new ProjectDAOImpl(), new TaskDAOImpl());
     private final TaskService taskService =
-            new TaskService(new TaskDAOImpl(), null); // supply dependencyDAO if you use it
+            new TaskService(new TaskDAOImpl(), new TaskDependencyDAOImpl()); // supply dependencyDAO if you use it
 
     private User currentUser;
 

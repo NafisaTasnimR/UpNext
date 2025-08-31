@@ -11,6 +11,12 @@
     <TextField fx:id="titleField" promptText="Subtask title"/>
     <TextArea fx:id="descArea" promptText="Description" prefRowCount="4"/>
 
+    <!-- Add priority selection -->
+    <HBox spacing="8" alignment="CENTER_LEFT">
+        <Label text="Priority:"/>
+        <ComboBox fx:id="priorityBox" prefWidth="120"/>
+    </HBox>
+
     <HBox spacing="8">
         <Button text="Save" onAction="#onSave"/>
         <Button text="Cancel" onAction="#onCancel"/>
