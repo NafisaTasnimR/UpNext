@@ -8,6 +8,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.stage.Stage;
 
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
@@ -30,6 +31,35 @@ public class ProjectFormController {
         List<String> statuses = Arrays.asList("PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED");
         statusBox.getItems().setAll(statuses);
         statusBox.getSelectionModel().select("PLANNING");
+
+        // Add listener to show warnings about status changes
+        statusBox.setOnAction(e -> showStatusWarning());
+    }
+
+    private void showStatusWarning() {
+        String selectedStatus = statusBox.getValue();
+        if (editing != null && selectedStatus != null) {
+            try {
+                if ("COMPLETED".equals(selectedStatus)) {
+                    List<org.example.upnext.model.Task> incompleteTasks =
+                            projectService.getIncompleteTasks(editing.getProjectId());
+                    if (!incompleteTasks.isEmpty()) {
+                        showWarning("Warning: " + incompleteTasks.size() +
+                                " task(s) are still incomplete. Completing the project will require all tasks to be done.");
+                    }
+                } else if ("CANCELLED".equals(selectedStatus)) {
+                    showWarning("Warning: Cancelling the project will block all existing tasks and prevent new task creation.");
+                } else if ("ON_HOLD".equals(selectedStatus)) {
+                    showWarning("Warning: Putting the project on hold will set all tasks to ON_HOLD status.");
+                }
+            } catch (SQLException ex) {
+                // Ignore validation errors during editing
+            }
+        }
+    }
+
+    private void showWarning(String message) {
+        new Alert(Alert.AlertType.WARNING, message, ButtonType.OK).showAndWait();
     }
 
     public void initForCreate(User user, Consumer<Project> onSaved) {
@@ -52,6 +82,7 @@ public class ProjectFormController {
     public void onSave() {
         try {
             if (editing == null) {
+                // Creating new project
                 Project p = new Project();
                 p.setName(nameField.getText().trim());
                 p.setDescription(descArea.getText());
@@ -59,21 +90,27 @@ public class ProjectFormController {
                 p.setStartDate(startPicker.getValue());
                 p.setEndDate(endPicker.getValue());
                 p.setStatus(statusBox.getValue());
+
                 long id = projectService.create(p);
                 p.setProjectId(id);
                 if (onSaved != null) onSaved.accept(p);
             } else {
+                // Editing existing project - validate status transition
                 editing.setName(nameField.getText().trim());
                 editing.setDescription(descArea.getText());
                 editing.setStartDate(startPicker.getValue());
                 editing.setEndDate(endPicker.getValue());
                 editing.setStatus(statusBox.getValue());
+
+                // This will validate the status transition and update tasks
                 projectService.update(editing);
                 if (onSaved != null) onSaved.accept(editing);
             }
             close();
-        } catch (Exception ex) {
+        } catch (SQLException ex) {
             showError(ex.getMessage());
+        } catch (Exception ex) {
+            showError("Error: " + ex.getMessage());
         }
     }
 

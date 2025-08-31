@@ -69,7 +69,6 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
         }
     }
 
-
     @Override public void update(Project p) throws SQLException {
         String sql = "UPDATE PROJECTS SET NAME=?, DESCRIPTION=?, OWNER_ID=?, START_DATE=?, END_DATE=?, STATUS=? WHERE PROJECT_ID=?";
         try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
@@ -96,25 +95,49 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
 
     @Override
     public List<Project> findByManager(long managerId) throws SQLException {
+        // FIXED QUERY: More comprehensive approach to find manager projects
         String sql = """
         SELECT DISTINCT p.* 
         FROM PROJECTS p
-        WHERE p.ASSIGNED_MANAGER_ID = ?                    -- Direct assignment field
+        WHERE p.OWNER_ID = ?                               -- Project owner
+           OR p.ASSIGNED_MANAGER_ID = ?                    -- Direct assignment field  
            OR EXISTS (
                SELECT 1 FROM PROJECT_MEMBERS pm 
                WHERE pm.PROJECT_ID = p.PROJECT_ID 
                  AND pm.USER_ID = ? 
-                 AND pm.PROJECT_ROLE = 'MANAGER'           -- Manager via PROJECT_MEMBERS
+                 AND UPPER(pm.PROJECT_ROLE) = 'MANAGER'    -- Only MANAGER role, not MEMBER
            )
+           OR EXISTS (
+               SELECT 1 FROM TASKS t
+               WHERE t.PROJECT_ID = p.PROJECT_ID
+                 AND t.ASSIGNEE_ID = ?                     -- Manager has tasks assigned
+           )
+        ORDER BY p.PROJECT_ID DESC
         """;
 
         try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setLong(1, managerId);
-            ps.setLong(2, managerId);
+            ps.setLong(1, managerId);  // owner check
+            ps.setLong(2, managerId);  // assigned manager check
+            ps.setLong(3, managerId);  // PROJECT_MEMBERS manager role check
+            ps.setLong(4, managerId);  // has assigned tasks check
             try (ResultSet rs = ps.executeQuery()) {
                 List<Project> list = new ArrayList<>();
                 while (rs.next()) list.add(map(rs));
                 return list;
+            }
+        }
+    }
+
+    @Override
+    public void updateStatus(long projectId, String status) throws SQLException {
+        String sql = "UPDATE PROJECTS SET STATUS = ?, UPDATED_AT = SYSTIMESTAMP WHERE PROJECT_ID = ?";
+
+        try (Connection conn = getConn(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, status);
+            ps.setLong(2, projectId);
+            int rowsUpdated = ps.executeUpdate();
+            if (rowsUpdated == 0) {
+                throw new SQLException("No project found with ID " + projectId);
             }
         }
     }
@@ -145,6 +168,9 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
         }
     }
 
+}
+
+
     @Override
     public double getProjectProgress(long projectId) throws SQLException {
         String sql = "SELECT PROGRESS_PCT FROM PROJECTS WHERE PROJECT_ID = ?";
@@ -161,4 +187,5 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
     }
 
 }
+
 

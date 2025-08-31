@@ -22,7 +22,7 @@
                 <TableView fx:id="projectTable" prefHeight="340"/>
                 <HBox spacing="6">
                     <Button text="Open" onAction="#onOpenProject"/>
-                    <!-- <Button text="Edit" onAction="#onEditProject"/>-->
+                    <Button text="Edit" onAction="#onEditProject"/>
                     <Button text="Delete" onAction="#onDeleteProject"/>
                 </HBox>
             </VBox>
