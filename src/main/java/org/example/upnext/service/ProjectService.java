@@ -32,7 +32,13 @@ public class ProjectService {
         if (project.getStatus() == null) {
             project.setStatus(determineInitialStatus(project));
         }
-        return projectDAO.create(project);
+        long projectId = projectDAO.create(project);
+
+        if (project.getOwnerId() != null) {
+            pmDAO.addMember(projectId, project.getOwnerId(), "MANAGER");
+        }
+
+        return projectId;
     }
 
     public void update(Project project) throws SQLException {
@@ -63,6 +69,7 @@ public class ProjectService {
         }
         return "ACTIVE";
     }
+
 
     /**
      * Gets the appropriate status for new tasks based on project status AND task dates
@@ -307,7 +314,10 @@ public class ProjectService {
     public List<Project> byMember(long userId) throws SQLException { return projectDAO.findByMember(userId); }
 
     public void assignManager(long projectId, long managerId) throws SQLException {
+        // FIXED: Add manager to PROJECT_MEMBERS with MANAGER role
         pmDAO.addMember(projectId, managerId, "MANAGER");
+        // Also update the direct assignment field
+        projectDAO.assignManager(projectId, managerId);
     }
 
     public void addMember(long projectId, long userId) throws SQLException {
@@ -353,6 +363,18 @@ public class ProjectService {
     }
 
     public boolean isManagerOfProject(long projectId, long userId) throws SQLException {
+        // ENHANCED: Check multiple ways someone can be a manager
+        Optional<Project> projectOpt = projectDAO.findById(projectId);
+        if (projectOpt.isEmpty()) return false;
+
+        Project project = projectOpt.get();
+
+        // Check if they're the owner
+        if (project.getOwnerId() != null && project.getOwnerId().equals(userId)) {
+            return true;
+        }
+
+        // Check if they have MANAGER role in PROJECT_MEMBERS
         return pmDAO.hasRole(projectId, userId, "MANAGER");
     }
 

@@ -333,19 +333,28 @@ public class TaskService {
     }
 
     // ==============================================================================
-    // Task Assignment (preserved from original)
+    // Task Assignment - FIXED VERSION
     // ==============================================================================
 
     public void assignTask(long taskId, long assigneeId, long actingUserId, String actingRole) throws SQLException {
         Task t = get(taskId);
+
+        // Validate assignee is a project member
         if (!pmDAO.isMember(t.getProjectId(), assigneeId)) {
             throw new SQLException("Assignee must be a member of this project.");
         }
+
+        // Check permissions - use projectService for more accurate manager checking
         boolean isAdmin = "ADMIN".equalsIgnoreCase(actingRole);
-        boolean isManager = "MANAGER".equalsIgnoreCase(actingRole);
-        if (!isAdmin && !isManager) {
+        boolean isGlobalManager = "MANAGER".equalsIgnoreCase(actingRole);
+        boolean isProjectManager = (projectService != null) ?
+                projectService.isManagerOfProject(t.getProjectId(), actingUserId) :
+                pmDAO.hasRole(t.getProjectId(), actingUserId, "MANAGER");
+
+        if (!isAdmin && !isGlobalManager && !isProjectManager) {
             throw new SQLException("Only Admin or Manager can assign tasks.");
         }
+
         taskDAO.assignTo(taskId, assigneeId);
     }
 
