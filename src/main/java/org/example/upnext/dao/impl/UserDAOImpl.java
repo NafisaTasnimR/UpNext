@@ -1,6 +1,7 @@
 package org.example.upnext.dao.impl;
 
 
+import org.example.upnext.config.Db;
 import org.example.upnext.dao.BaseDAO;
 import org.example.upnext.dao.UserDAO;
 import org.example.upnext.model.User;
@@ -87,5 +88,41 @@ public class UserDAOImpl extends BaseDAO implements UserDAO {
             ps.setLong(1, id); ps.executeUpdate();
         }
     }
+    @Override
+    public List<User> findManagers() throws SQLException {
+        String sql = "SELECT * FROM USERS WHERE UPPER(GLOBAL_ROLE)='MANAGER'";
+        try (Connection c = Db.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            List<User> list = new ArrayList<>();
+            while (rs.next()) list.add(map(rs));
+            return list;
+        }
+    }
+
+    @Override
+    public List<User> findMembers() throws SQLException {
+        String sql = "SELECT * FROM USERS WHERE UPPER(GLOBAL_ROLE)='MEMBER'";
+        try (var c = Db.getConnection(); var ps = c.prepareStatement(sql); var rs = ps.executeQuery()) {
+            List<User> list = new ArrayList<>(); while (rs.next()) list.add(map(rs)); return list;
+        }
+    }
+
+    @Override
+    public List<User> findMembersByProject(long projectId) throws SQLException {
+        String sql = """
+      SELECT u.* FROM USERS u
+      JOIN PROJECT_MEMBERS pm ON pm.USER_ID=u.USER_ID
+      WHERE pm.PROJECT_ID=?
+    """;
+        try (var c = Db.getConnection(); var ps = c.prepareStatement(sql)) {
+            ps.setLong(1, projectId);
+            try (var rs = ps.executeQuery()) {
+                List<User> list = new ArrayList<>(); while (rs.next()) list.add(map(rs)); return list;
+            }
+        }
+    }
+
+
 }
 

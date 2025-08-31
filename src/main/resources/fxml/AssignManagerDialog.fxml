@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<VBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="org.example.upnext.ui.controller.AssignManagerController"
+      spacing="10" style="-fx-padding:12;">
+    <Label text="Assign Manager" style="-fx-font-size:16;-fx-font-weight:bold;"/>
+    <Label fx:id="projectLabel"/>
+    <ComboBox fx:id="managerBox" prefWidth="280"/>
+    <HBox spacing="8">
+        <Button text="Assign" onAction="#onAssign"/>
+        <Button text="Cancel" onAction="#onCancel"/>
+    </HBox>
+    <Label fx:id="statusLabel" textFill="red"/>
+</VBox>

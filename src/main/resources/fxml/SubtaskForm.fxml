@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="org.example.upnext.ui.controller.SubtaskFormController"
+      spacing="10" style="-fx-padding:12;">
+    <Label text="New Subtask" style="-fx-font-size:16;-fx-font-weight:bold;"/>
+    <Label fx:id="parentLabel"/>
+
+    <TextField fx:id="titleField" promptText="Subtask title"/>
+    <TextArea fx:id="descArea" promptText="Description" prefRowCount="4"/>
+
+    <HBox spacing="8">
+        <Button text="Save" onAction="#onSave"/>
+        <Button text="Cancel" onAction="#onCancel"/>
+    </HBox>
+
+    <Label fx:id="statusLabel" textFill="red"/>
+</VBox>

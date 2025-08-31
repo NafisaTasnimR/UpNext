@@ -14,5 +14,9 @@ public interface UserDAO {
     List<User> findAll() throws SQLException;
     void update(User u) throws SQLException;
     void delete(long id) throws SQLException;
+    java.util.List<org.example.upnext.model.User> findManagers() throws java.sql.SQLException;
+    java.util.List<org.example.upnext.model.User> findMembers() throws java.sql.SQLException;
+    java.util.List<org.example.upnext.model.User> findMembersByProject(long projectId) throws java.sql.SQLException;
+
 }
 

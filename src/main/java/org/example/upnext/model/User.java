@@ -22,7 +22,7 @@ public class User {
         this.status = status;
     }
 
-    public Long getUserId() {
+    public long getUserId() {
         return userId;
     }
 

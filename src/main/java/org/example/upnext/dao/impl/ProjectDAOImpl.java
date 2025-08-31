@@ -1,5 +1,6 @@
 package org.example.upnext.dao.impl;
 
+import org.example.upnext.config.Db;
 import org.example.upnext.dao.BaseDAO;
 import org.example.upnext.dao.ProjectDAO;
 import org.example.upnext.model.Project;
@@ -58,14 +59,16 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
         }
     }
 
-    @Override public List<Project> findAll() throws SQLException {
-        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement("SELECT * FROM PROJECTS ORDER BY PROJECT_ID DESC");
+    public List<Project> findAll() throws SQLException {
+        String sql = "SELECT * FROM PROJECTS ORDER BY CREATED_AT DESC";
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             List<Project> list = new ArrayList<>();
             while (rs.next()) list.add(map(rs));
             return list;
         }
     }
+
 
     @Override public void update(Project p) throws SQLException {
         String sql = "UPDATE PROJECTS SET NAME=?, DESCRIPTION=?, OWNER_ID=?, START_DATE=?, END_DATE=?, STATUS=? WHERE PROJECT_ID=?";
@@ -88,6 +91,57 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
                      "DELETE FROM PROJECTS WHERE PROJECT_ID=?")) {
             p.setLong(1, projectId);
             p.executeUpdate();
+        }
+    }
+
+    @Override
+    public List<Project> findByManager(long managerId) throws SQLException {
+        String sql = """
+        SELECT DISTINCT p.* 
+        FROM PROJECTS p
+        WHERE p.ASSIGNED_MANAGER_ID = ?                    -- Direct assignment field
+           OR EXISTS (
+               SELECT 1 FROM PROJECT_MEMBERS pm 
+               WHERE pm.PROJECT_ID = p.PROJECT_ID 
+                 AND pm.USER_ID = ? 
+                 AND pm.PROJECT_ROLE = 'MANAGER'           -- Manager via PROJECT_MEMBERS
+           )
+        """;
+
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, managerId);
+            ps.setLong(2, managerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<Project> list = new ArrayList<>();
+                while (rs.next()) list.add(map(rs));
+                return list;
+            }
+        }
+    }
+
+    @Override
+    public void assignManager(long projectId, long managerId) throws SQLException {
+        String sql = "UPDATE PROJECTS SET ASSIGNED_MANAGER_ID=? WHERE PROJECT_ID=?";
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, managerId);
+            ps.setLong(2, projectId);
+            ps.executeUpdate();
+        }
+    }
+
+    @Override
+    public List<Project> findByMember(long userId) throws SQLException {
+        String sql = """
+      SELECT p.*
+        FROM PROJECTS p
+        JOIN PROJECT_MEMBERS pm ON pm.PROJECT_ID = p.PROJECT_ID
+       WHERE pm.USER_ID = ?
+    """;
+        try (var c = getConn(); var ps = c.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            try (var rs = ps.executeQuery()) {
+                List<Project> list = new ArrayList<>(); while (rs.next()) list.add(map(rs)); return list;
+            }
         }
     }
 
