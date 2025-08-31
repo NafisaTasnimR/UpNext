@@ -2,13 +2,13 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 <VBox xmlns:fx="http://javafx.com/fxml"
-      fx:controller="org.example.upnext.ui.controller.AssignManagerController"
+      fx:controller="org.example.upnext.ui.controller.AssignProjectMembersController"
       spacing="10" style="-fx-padding:12;">
-    <Label text="Assign Manager" style="-fx-font-size:16;-fx-font-weight:bold;"/>
+    <Label text="Assign Project Members" style="-fx-font-size:16;-fx-font-weight:bold;"/>
     <Label fx:id="projectLabel"/>
-    <ComboBox fx:id="managerBox" prefWidth="280"/>
+    <ListView fx:id="memberList" prefWidth="320" prefHeight="260"/>
     <HBox spacing="8">
-        <Button text="Assign" onAction="#onAssign"/>
+        <Button text="Save" onAction="#onSave"/>
         <Button text="Cancel" onAction="#onCancel"/>
     </HBox>
     <Label fx:id="statusLabel" textFill="red"/>

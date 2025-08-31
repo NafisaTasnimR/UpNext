@@ -7,7 +7,11 @@
             <Label text="UpNext Dashboard" style="-fx-font-size:16;-fx-font-weight:bold;"/>
             <Pane HBox.hgrow="ALWAYS"/>
             <Button text="New Project" onAction="#onNewProject"/>
-            <Button text="Assign Manager" onAction="#onAssignManager"/>
+            <!-- Admin-only -->
+            <Button fx:id="assignManagerBtn" text="Assign Manager" onAction="#onAssignManager"/>
+            <!-- Manager-only -->
+            <Button fx:id="assignMembersBtn" text="Assign Members" onAction="#onAssignMembers"/>
+
             <Button text="Logout" onAction="#onLogout"/>
         </ToolBar>
     </top>
@@ -18,7 +22,7 @@
                 <TableView fx:id="projectTable" prefHeight="340"/>
                 <HBox spacing="6">
                     <Button text="Open" onAction="#onOpenProject"/>
-                    <Button text="Edit" onAction="#onEditProject"/>
+                    <!-- <Button text="Edit" onAction="#onEditProject"/>-->
                     <Button text="Delete" onAction="#onDeleteProject"/>
                 </HBox>
             </VBox>
@@ -27,6 +31,8 @@
                 <TreeTableView fx:id="taskTree" prefHeight="420"/>
                 <HBox spacing="6">
                     <Button text="New Task" onAction="#onNewTask"/>
+                    <Button fx:id="newSubtaskBtn" text="New Subtask" onAction="#onNewSubtask"/>
+                    <Button fx:id="assignTaskBtn" text="Assign To..." onAction="#onAssignTaskTo"/>
                     <Button text="Start" onAction="#onStartTask"/>
                     <Button text="Complete" onAction="#onCompleteTask"/>
                     <Button text="Refresh" onAction="#onRefreshTasks"/>

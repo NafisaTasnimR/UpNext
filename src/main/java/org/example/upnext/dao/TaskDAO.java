@@ -14,7 +14,7 @@ public interface TaskDAO {
     List<Task> findByProject(long projectId) throws SQLException;
     List<Task> findChildren(long parentTaskId) throws SQLException;
     List<Task> findBlocked(long projectId) throws SQLException;
-
+    void assignTo(long taskId, long userId) throws java.sql.SQLException;
     void updateStatus(long taskId, String status) throws SQLException;
     void setProgress(long taskId, double pct) throws SQLException;
 }

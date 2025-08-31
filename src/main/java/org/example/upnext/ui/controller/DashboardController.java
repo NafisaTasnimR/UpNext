@@ -1,133 +1,289 @@
 package org.example.upnext.ui.controller;
 
-import org.example.upnext.dao.impl.*;
+import javafx.event.ActionEvent;
+import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.control.TreeItem;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import org.example.upnext.dao.impl.ProjectDAOImpl;
+import org.example.upnext.dao.impl.TaskDAOImpl;
 import org.example.upnext.model.Project;
 import org.example.upnext.model.Task;
 import org.example.upnext.model.User;
 import org.example.upnext.service.ProjectService;
 import org.example.upnext.service.TaskService;
-import javafx.fxml.FXML;
-import javafx.fxml.FXMLLoader;
-import javafx.scene.Scene;
-import javafx.scene.control.*;
-import javafx.scene.control.cell.TreeItemPropertyValueFactory;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
 
 import java.sql.SQLException;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class DashboardController {
+
+    // FXML refs (ensure they exist in FXML)
     @FXML private TableView<Project> projectTable;
     @FXML private TreeTableView<Task> taskTree;
     @FXML private Label statusLabel;
+    @FXML private Button assignManagerBtn;  // Admin-only
+    @FXML private Button assignMembersBtn;  // Manager-only
+    @FXML private Button assignTaskBtn;     // Manager-only
+    @FXML private Button newSubtaskBtn;
 
-    private final ProjectService projectService = new ProjectService(new ProjectDAOImpl(), new TaskDAOImpl());
-    private final TaskService taskService = new TaskService(new TaskDAOImpl(), new TaskDependencyDAOImpl());
+    private final ProjectService projectService =
+            new ProjectService(new ProjectDAOImpl(), new TaskDAOImpl());
+    private final TaskService taskService =
+            new TaskService(new TaskDAOImpl(), null); // supply dependencyDAO if you use it
+
     private User currentUser;
 
     public void setCurrentUser(User u) {
         this.currentUser = u;
         statusLabel.setText("Logged in as: " + u.getUsername());
-        loadProjects();          // <-- single source of truth
-        // optional: if you show overdue/blocked/notifs
+        applyRoleUI();
+        loadProjects();
     }
 
-    private void loadProjects() {
+    @FXML
+    private void onNewSubtask() {
+        if (currentUser == null) { statusLabel.setText("Not logged in"); return; }
+        Project p = projectTable.getSelectionModel().getSelectedItem();
+        if (p == null) { statusLabel.setText("Select a project"); return; }
+
+        Task parent = getSelectedTask();
+        if (parent == null) { statusLabel.setText("Select a parent task first"); return; }
+
         try {
-            if (currentUser == null) {
-                projectTable.getItems().clear();
+            boolean isAdmin   = "ADMIN".equalsIgnoreCase(currentUser.getGlobalRole());
+            boolean isManager = projectService.isManagerOfProject(p.getProjectId(), currentUser.getUserId());
+            boolean isParentAssignee = parent.getAssigneeId() != null &&
+                    parent.getAssigneeId().equals(currentUser.getUserId());
+            if (!isAdmin && !isManager && !isParentAssignee) {
+                statusLabel.setText("You can only create subtasks under tasks you own.");
                 return;
             }
-            String role = currentUser.getGlobalRole();
-            if ("MANAGER".equalsIgnoreCase(role)) {
-                projectTable.getItems().setAll(projectService.byManager(currentUser.getUserId()));
-            } else if ("ADMIN".equalsIgnoreCase(role)) {
-                projectTable.getItems().setAll(projectService.all());  // see note below
-            } else {
-                // Members typically don't own projects; show none (or show projects that contain their tasks if you add that feature)
-                projectTable.getItems().clear();
-            }
+
+            var members = projectService.projectMembers(p.getProjectId());
+
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/SubtaskForm.fxml"));
+            Scene scene = new Scene(loader.load());
+            SubtaskFormController ctrl = loader.getController();
+            ctrl.init(parent, currentUser, members);
+
+            Stage dlg = new Stage();
+            dlg.initModality(Modality.APPLICATION_MODAL);
+            dlg.setTitle("New Subtask");
+            dlg.setScene(scene);
+            dlg.showAndWait();
+
+            loadTasksForProject(p.getProjectId());  // refresh
+
         } catch (Exception e) {
-            statusLabel.setText("Failed to load projects: " + e.getMessage());
+            statusLabel.setText("Open subtask form failed: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
+    private void wireNewSubtaskButton() {
+        if (newSubtaskBtn == null) return;
+        newSubtaskBtn.setDisable(true);
+        taskTree.getSelectionModel().selectedItemProperty().addListener((obs, a, b) -> {
+            boolean hasTask = b != null && b.getValue() != null && b.getValue().getTaskId() != null;
+            newSubtaskBtn.setDisable(!hasTask);
+        });
+    }
 
     @FXML
     public void initialize() {
         // Projects table columns
         TableColumn<Project, String> nameCol = new TableColumn<>("Name");
-        nameCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().getName()));
-
+        nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
         TableColumn<Project, String> statusCol = new TableColumn<>("Status");
-        statusCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().getStatus()));
-
+        statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
         projectTable.getColumns().setAll(nameCol, statusCol);
 
-        // Task tree columns
-        TreeTableColumn<Task, String> titleCol = new TreeTableColumn<>("Title");
-        titleCol.setPrefWidth(240);
-        titleCol.setCellValueFactory(new TreeItemPropertyValueFactory<>("title"));
+        // Tasks tree columns (title, status, priority, progress, assignee)
+        TreeTableColumn<Task, String> tTitle = new TreeTableColumn<>("Title");
+        tTitle.setCellValueFactory(p -> new javafx.beans.property.SimpleStringProperty(
+                p.getValue().getValue().getTitle()));
+        tTitle.setPrefWidth(400);
+        taskTree.setColumnResizePolicy(TreeTableView.CONSTRAINED_RESIZE_POLICY);
+        TreeTableColumn<Task, String> tStatus = new TreeTableColumn<>("Status");
+        tStatus.setCellValueFactory(p -> new javafx.beans.property.SimpleStringProperty(
+                p.getValue().getValue().getStatus()));
+        TreeTableColumn<Task, String> tPrio = new TreeTableColumn<>("Priority");
+        tPrio.setCellValueFactory(p -> new javafx.beans.property.SimpleStringProperty(
+                p.getValue().getValue().getPriority()));
+        TreeTableColumn<Task, Number> tProg = new TreeTableColumn<>("Progress");
+        tProg.setCellValueFactory(p ->
+                new javafx.beans.property.SimpleDoubleProperty(
+                        p.getValue().getValue().getProgressPct() / 100.0
+                )
+        );
+        //tProg.setCellFactory(javafx.scene.control.cell.ProgressBarTreeTableCell.forTreeTableColumn());
+        tProg.setPrefWidth(140);
 
-        TreeTableColumn<Task, String> stCol = new TreeTableColumn<>("Status");
-        stCol.setCellValueFactory(param -> new javafx.beans.property.SimpleStringProperty(
-                param.getValue().getValue().getStatus()));
+        TreeTableColumn<Task, String> tPct = new TreeTableColumn<>("%");
+        tPct.setCellValueFactory(p ->
+                new javafx.beans.property.SimpleStringProperty(
+                        String.format("%.0f%%", p.getValue().getValue().getProgressPct())
+                )
+        );
+        tPct.setPrefWidth(70);
 
-        TreeTableColumn<Task, String> prCol = new TreeTableColumn<>("Priority");
-        prCol.setCellValueFactory(param -> new javafx.beans.property.SimpleStringProperty(
-                param.getValue().getValue().getPriority()));
+        TreeTableColumn<Task, String> tAssignee = new TreeTableColumn<>("Assigned to");
+        tAssignee.setCellValueFactory(p -> new javafx.beans.property.SimpleStringProperty(
+                p.getValue().getValue().getAssigneeName() == null ? "" : p.getValue().getValue().getAssigneeName()));
 
-        TreeTableColumn<Task, Number> prgCol = new TreeTableColumn<>("Progress");
-        prgCol.setCellValueFactory(param -> new javafx.beans.property.SimpleDoubleProperty(
-                param.getValue().getValue().getProgressPct()));
+        taskTree.getColumns().setAll(tTitle, tStatus, tPrio, tProg, tAssignee , tPct );
 
-        taskTree.getColumns().setAll(titleCol, stCol, prCol, prgCol);
-    }
+        if (taskTree != null) wireAssignButton();
 
-
-    @FXML
-    public void onOpenProject() {
-        Project p = projectTable.getSelectionModel().getSelectedItem();
-        if (p == null) { statusLabel.setText("Select a project"); return; }
-        loadTasksForProject(p.getProjectId());
-    }
-
-    private void loadTasksForProject(long projectId) {
-        try {
-            List<Task> tasks = taskService.projectTasks(projectId);
-            Map<Long, TreeItem<Task>> byId = new HashMap<>();
-            TreeItem<Task> root = new TreeItem<>(fakeRoot(projectId));
-            root.setExpanded(true);
-
-            // Index by id
-            tasks.forEach(t -> byId.put(t.getTaskId(), new TreeItem<>(t)));
-
-            // Build hierarchy
-            for (Task t : tasks) {
-                TreeItem<Task> item = byId.get(t.getTaskId());
-                if (t.getParentTaskId() != null && byId.containsKey(t.getParentTaskId())) {
-                    byId.get(t.getParentTaskId()).getChildren().add(item);
-                } else {
-                    root.getChildren().add(item);
-                }
+        // When project selection changes, refresh tasks
+        projectTable.getSelectionModel().selectedItemProperty().addListener((obs, a, b) -> {
+            if (b != null) {
+                try { loadTasksForProject(b.getProjectId()); }
+                catch (Exception e) { statusLabel.setText("Load tasks failed: " + e.getMessage()); }
+            } else {
+                taskTree.setRoot(null);
             }
-            taskTree.setRoot(root);
-            taskTree.setShowRoot(false);
-            statusLabel.setText("Loaded " + tasks.size() + " tasks.");
+        });
+    }
+
+    private void applyRoleUI() {
+        if (currentUser == null) return;
+        String role = currentUser.getGlobalRole();
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(role);
+        boolean isManager = "MANAGER".equalsIgnoreCase(role);
+        if (assignManagerBtn != null) assignManagerBtn.setDisable(!isAdmin);
+        if (assignMembersBtn != null) assignMembersBtn.setDisable(!isManager && !isAdmin);
+        if (assignTaskBtn != null) assignTaskBtn.setDisable(!isManager && !isAdmin);
+    }
+
+    private void loadProjects() {
+        try {
+            if (currentUser == null) { projectTable.getItems().clear(); return; }
+            String role = currentUser.getGlobalRole();
+            if ("ADMIN".equalsIgnoreCase(role)) {
+                projectTable.getItems().setAll(projectService.all());
+            } else if ("MANAGER".equalsIgnoreCase(role)) {
+                projectTable.getItems().setAll(projectService.byManager(currentUser.getUserId()));
+            } else {
+                projectTable.getItems().setAll(projectService.byMember(currentUser.getUserId()));
+            }
         } catch (SQLException e) {
-            statusLabel.setText("Failed to load tasks: " + e.getMessage());
+            statusLabel.setText("Failed to load projects: " + e.getMessage());
         }
     }
 
-    private Task fakeRoot(long projectId) {
-        Task t = new Task();
-        t.setProjectId(projectId);
-        t.setTitle("ROOT");
-        t.setStatus("TODO");
-        t.setPriority("LOW");
-        return t;
+    private void loadTasksForProject(long projectId) throws SQLException {
+        List<Task> tasks = taskService.findByProject(projectId); // or projectTasks(projectId)
+
+        // Build parent->children map
+        Map<Long, TreeItem<Task>> byId = new HashMap<>();
+        TreeItem<Task> root = new TreeItem<>(new Task(projectId, "ROOT")); // dummy invisible root
+        root.setExpanded(true);
+
+        // First pass: create an item for each task
+        for (Task t : tasks) {
+            TreeItem<Task> item = new TreeItem<>(t);
+            byId.put(t.getTaskId(), item);
+        }
+
+        // Second pass: attach to parent or root
+        for (Task t : tasks) {
+            TreeItem<Task> item = byId.get(t.getTaskId());
+            Long parentId = t.getParentTaskId();
+            if (parentId != null && byId.containsKey(parentId)) {
+                byId.get(parentId).getChildren().add(item);
+            } else {
+                root.getChildren().add(item);
+            }
+        }
+
+        taskTree.setRoot(root);
+        taskTree.setShowRoot(false);
+    }
+
+
+
+    private Task getSelectedTask() {
+        TreeItem<Task> item = taskTree.getSelectionModel().getSelectedItem();
+        return item != null ? item.getValue() : null;
+    }
+
+    // =========== Handlers ===========
+
+
+    @FXML
+    private void onOpenProject() {
+        Project p = projectTable.getSelectionModel().getSelectedItem();
+        if (p == null) { statusLabel.setText("Select a project first."); return; }
+        try { loadTasksForProject(p.getProjectId()); }
+        catch (Exception e) { statusLabel.setText("Open project failed: " + e.getMessage()); }
+    }
+
+    // ADMIN: assign a Manager to the selected project (PROJECT_MEMBERS role='MANAGER')
+    @FXML
+    private void onAssignManager() {
+        if (currentUser == null) { statusLabel.setText("Not logged in"); return; }
+        if (!"ADMIN".equalsIgnoreCase(currentUser.getGlobalRole())) {
+            statusLabel.setText("Only Admin can assign a manager.");
+            return;
+        }
+        Project p = projectTable.getSelectionModel().getSelectedItem();
+        if (p == null) { statusLabel.setText("Select a project"); return; }
+
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/AssignManagerDialog.fxml"));
+            Scene scene = new Scene(loader.load());
+            AssignManagerController ctrl = loader.getController();
+            ctrl.init(p, (proj, manager) -> {
+                statusLabel.setText("Assigned manager " + manager.getUsername() + " to " + proj.getName());
+            });
+            Stage dlg = new Stage();
+            dlg.initModality(Modality.APPLICATION_MODAL);
+            dlg.setTitle("Assign Manager");
+            dlg.setScene(scene);
+            dlg.showAndWait();
+        } catch (Exception e) {
+            statusLabel.setText("Open Assign Manager dialog failed: " + e.getMessage());
+        }
+    }
+
+    // MANAGER/ADMIN: assign members to selected project (role='MEMBER')
+    @FXML
+    private void onAssignMembers() {
+        if (currentUser == null) { statusLabel.setText("Not logged in"); return; }
+        Project p = projectTable.getSelectionModel().getSelectedItem();
+        if (p == null) { statusLabel.setText("Select a project"); return; }
+
+        try {
+            boolean isAdmin = "ADMIN".equalsIgnoreCase(currentUser.getGlobalRole());
+            boolean isGlobalManager = "MANAGER".equalsIgnoreCase(currentUser.getGlobalRole());
+            boolean isProjectManager = projectService.isManagerOfProject(p.getProjectId(), currentUser.getUserId());
+
+            if (!isAdmin && !isGlobalManager && !isProjectManager) {
+                statusLabel.setText("You cannot assign members for this project");
+                return;
+            }
+
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/AssignProjectMembersDialog.fxml"));
+            Scene scene = new Scene(loader.load());
+            AssignProjectMembersController ctrl = loader.getController();
+            ctrl.init(p);
+            Stage dlg = new Stage();
+            dlg.initModality(Modality.APPLICATION_MODAL);
+            dlg.setTitle("Assign Project Members");
+            dlg.setScene(scene);
+            dlg.showAndWait();
+
+        } catch (Exception e) {
+            statusLabel.setText("Open dialog failed: " + e.getMessage());
+        }
     }
 
     @FXML
@@ -189,13 +345,20 @@ public class DashboardController {
             Scene scene = new Scene(loader.load());
             TaskFormController ctrl = loader.getController();
             ctrl.initForCreate(p.getProjectId(), savedId -> {
-                loadTasksForProject(p.getProjectId());
+                try {
+                    loadTasksForProject(p.getProjectId());
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
                 statusLabel.setText("Task created: " + savedId);
             });
             Stage dlg = new Stage(); dlg.initModality(Modality.APPLICATION_MODAL);
             dlg.setTitle("New Task"); dlg.setScene(scene); dlg.showAndWait();
         } catch (Exception ex) { statusLabel.setText("Open task form failed: " + ex.getMessage()); }
     }
+
+
+
 
     @FXML
     public void onStartTask() {
@@ -207,6 +370,7 @@ public class DashboardController {
             statusLabel.setText("Task started");
         } catch (SQLException e) { statusLabel.setText(e.getMessage()); }
     }
+
 
     @FXML
     public void onCompleteTask() {
@@ -220,53 +384,98 @@ public class DashboardController {
     }
 
     @FXML
-    public void onRefreshTasks() {
+    public void onRefreshTasks() throws SQLException {
         reloadSelectedProjectTasks();
     }
 
+
+    private void reloadSelectedProjectTasks() throws SQLException {
+        Project p = projectTable.getSelectionModel().getSelectedItem();
+        if (p == null) { taskTree.setRoot(null); return; }
+        try { loadTasksForProject(p.getProjectId()); }
+        catch (Exception e) { statusLabel.setText("Refresh failed: " + e.getMessage()); }
+    }
+
+
     @FXML
-    public void onLogout() {
-        Stage stage = (Stage) statusLabel.getScene().getWindow();
+    private void onAssignTaskTo() {
+        if (currentUser == null) { statusLabel.setText("Not logged in"); return; }
+        Project p = projectTable.getSelectionModel().getSelectedItem();
+        if (p == null) { statusLabel.setText("Select a project first"); return; }
+
+        Task task = getSelectedTask();
+        if (task == null) { statusLabel.setText("Select a task to assign"); return; }
+
         try {
-            Stage s = (Stage) statusLabel.getScene().getWindow();
+            boolean isAdmin = "ADMIN".equalsIgnoreCase(currentUser.getGlobalRole());
+            boolean isGlobalManager = "MANAGER".equalsIgnoreCase(currentUser.getGlobalRole());
+            boolean isProjectManager = projectService.isManagerOfProject(p.getProjectId(), currentUser.getUserId());
+
+            if (!isAdmin && !isGlobalManager && !isProjectManager) {
+                statusLabel.setText("You cannot assign tasks in this project");
+                return;
+            }
+
+            var members = projectService.projectMembers(p.getProjectId());
+            if (members == null || members.isEmpty()) {
+                statusLabel.setText("No members in this project. Use 'Assign Members' first.");
+                return;
+            }
+
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/AssignTaskDialog.fxml"));
+            Scene scene = new Scene(loader.load());
+            AssignTaskController ctrl = loader.getController();
+            ctrl.init(task, p.getProjectId(), currentUser, members, who -> {
+                statusLabel.setText("Assigned to " + who.getUsername());
+                try { loadTasksForProject(p.getProjectId()); } catch (Exception ignored) {}
+            });
+            Stage dlg = new Stage();
+            dlg.initModality(Modality.APPLICATION_MODAL);
+            dlg.setTitle("Assign Task To Member");
+            dlg.setScene(scene);
+            dlg.showAndWait();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            statusLabel.setText("Open assign dialog failed: " + e.getMessage());
+        }
+    }
+    // Enable/disable the button based on selection
+    private void wireAssignButton() {
+        if (assignTaskBtn == null) return;
+        assignTaskBtn.setDisable(true);
+        taskTree.getSelectionModel().selectedItemProperty().addListener((obs, a, b) -> {
+            boolean hasTask = b != null && b.getValue() != null && b.getValue().getTaskId() != null;
+            String role = currentUser != null ? currentUser.getGlobalRole() : "";
+            boolean canTry = "ADMIN".equalsIgnoreCase(role) || "MANAGER".equalsIgnoreCase(role);
+            assignTaskBtn.setDisable(!(hasTask && canTry));
+        });
+    }
+
+
+    private Task fakeRoot(long projectId) {
+        Task t = new Task();
+        t.setProjectId(projectId);
+        t.setTitle("ROOT");
+        t.setStatus("TODO");
+        t.setPriority("LOW");
+        return t;
+    }
+
+
+    @FXML
+    private void onLogout() {
+        try {
+            this.currentUser = null;
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/LoginView.fxml"));
-            s.setScene(new Scene(loader.load()));
+            Scene scene = new Scene(loader.load(), 920, 600);
+            Stage stage = (Stage) projectTable.getScene().getWindow();
+            stage.setScene(scene);
+            stage.centerOnScreen();
+            stage.show();
         } catch (Exception e) {
             statusLabel.setText("Logout failed: " + e.getMessage());
         }
     }
-
-    @FXML
-    public void onAssignManager() {
-        Project p = projectTable.getSelectionModel().getSelectedItem();
-        if (p == null) { statusLabel.setText("Select a project first."); return; }
-
-        try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/AssignManagerDialog.fxml"));
-            Scene scene = new Scene(loader.load());
-            AssignManagerController ctrl = loader.getController();
-            ctrl.init(p, (proj, manager) -> {
-                statusLabel.setText("Assigned project '" + proj.getName() + "' to " + manager.getUsername());
-                loadProjects(); // refresh
-            });
-            Stage dlg = new Stage();
-            dlg.initModality(Modality.APPLICATION_MODAL);
-            dlg.setTitle("Assign Manager");
-            dlg.setScene(scene);
-            dlg.showAndWait();
-        } catch (Exception e) {
-            statusLabel.setText("Open dialog failed: " + e.getMessage());
-        }
-    }
-
-
-    private Task getSelectedTask() {
-        TreeItem<Task> item = taskTree.getSelectionModel().getSelectedItem();
-        return (item == null || item.getValue() == null || "ROOT".equals(item.getValue().getTitle())) ? null : item.getValue();
-    }
-
-    private void reloadSelectedProjectTasks() {
-        Project p = projectTable.getSelectionModel().getSelectedItem();
-        if (p != null) loadTasksForProject(p.getProjectId());
-    }
 }
+

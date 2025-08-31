@@ -1,5 +1,6 @@
 package org.example.upnext.dao.impl;
 
+import org.example.upnext.config.Db;
 import org.example.upnext.dao.BaseDAO;
 import org.example.upnext.dao.ProjectDAO;
 import org.example.upnext.model.Project;
@@ -91,9 +92,21 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
 
     @Override
     public List<Project> findByManager(long managerId) throws SQLException {
-        String sql = "SELECT * FROM PROJECTS WHERE ASSIGNED_MANAGER_ID=?";
+        String sql = """
+        SELECT DISTINCT p.* 
+        FROM PROJECTS p
+        WHERE p.ASSIGNED_MANAGER_ID = ?                    -- Direct assignment field
+           OR EXISTS (
+               SELECT 1 FROM PROJECT_MEMBERS pm 
+               WHERE pm.PROJECT_ID = p.PROJECT_ID 
+                 AND pm.USER_ID = ? 
+                 AND pm.PROJECT_ROLE = 'MANAGER'           -- Manager via PROJECT_MEMBERS
+           )
+        """;
+
         try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setLong(1, managerId);
+            ps.setLong(2, managerId);
             try (ResultSet rs = ps.executeQuery()) {
                 List<Project> list = new ArrayList<>();
                 while (rs.next()) list.add(map(rs));
@@ -111,6 +124,23 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
             ps.executeUpdate();
         }
     }
+
+    @Override
+    public List<Project> findByMember(long userId) throws SQLException {
+        String sql = """
+      SELECT p.*
+        FROM PROJECTS p
+        JOIN PROJECT_MEMBERS pm ON pm.PROJECT_ID = p.PROJECT_ID
+       WHERE pm.USER_ID = ?
+    """;
+        try (var c = getConn(); var ps = c.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            try (var rs = ps.executeQuery()) {
+                List<Project> list = new ArrayList<>(); while (rs.next()) list.add(map(rs)); return list;
+            }
+        }
+    }
+
 
 }
 

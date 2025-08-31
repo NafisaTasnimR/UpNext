@@ -27,6 +27,8 @@ public class TaskDAOImpl extends BaseDAO implements TaskDAO {
         double eh = rs.getDouble("ESTIMATED_HOURS"); if (!rs.wasNull()) t.setEstimatedHours(eh);
         double ah = rs.getDouble("ACTUAL_HOURS");    if (!rs.wasNull()) t.setActualHours(ah);
         t.setBlocked("Y".equals(rs.getString("IS_BLOCKED")));
+        t.setAssigneeName(rs.getString("assignee_name"));
+
         return t;
     }
 
@@ -89,20 +91,46 @@ public class TaskDAOImpl extends BaseDAO implements TaskDAO {
         }
     }
 
-    @Override public Optional<Task> findById(long id) throws SQLException {
-        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement("SELECT * FROM TASKS WHERE TASK_ID=?")) {
-            ps.setLong(1, id); try (ResultSet rs = ps.executeQuery()) { return rs.next() ? Optional.of(map(rs)) : Optional.empty(); }
-        }
-    }
-
-    @Override public List<Task> findByProject(long projectId) throws SQLException {
-        String sql = "SELECT * FROM TASKS WHERE PROJECT_ID=? ORDER BY TASK_ID";
+    @Override
+    public Optional<Task> findById(long id) throws SQLException {
+        String sql = """
+        SELECT t.*,
+               u.username AS assignee_name
+        FROM TASKS t
+        LEFT JOIN USERS u ON t.ASSIGNEE_ID = u.USER_ID
+        WHERE t.TASK_ID = ?
+        """;
         try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setLong(1, projectId); try (ResultSet rs = ps.executeQuery()) {
-                List<Task> list = new ArrayList<>(); while (rs.next()) list.add(map(rs)); return list;
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(map(rs)) : Optional.empty();
             }
         }
     }
+
+    @Override
+    public List<Task> findByProject(long projectId) throws SQLException {
+        String sql = """
+        SELECT t.*,
+               u.username AS assignee_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assignee_id = u.user_id
+        WHERE t.project_id = ?
+        ORDER BY t.task_id
+    """;
+
+        try (Connection c = getConn(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, projectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<Task> list = new ArrayList<>();
+                while (rs.next()) {
+                    list.add(map(rs));
+                }
+                return list;
+            }
+        }
+    }
+
 
     @Override public List<Task> findChildren(long parentTaskId) throws SQLException {
         String sql = "SELECT * FROM TASKS WHERE PARENT_TASK_ID=? ORDER BY TASK_ID";
@@ -138,5 +166,14 @@ public class TaskDAOImpl extends BaseDAO implements TaskDAO {
             ps.setDouble(1, pct); ps.setLong(2, taskId); ps.executeUpdate();
         }
     }
+
+    @Override
+    public void assignTo(long taskId, long userId) throws SQLException {
+        String sql = "UPDATE TASKS SET ASSIGNEE_ID=? WHERE TASK_ID=?";
+        try (var c = getConn(); var ps = c.prepareStatement(sql)) {
+            ps.setLong(1, userId); ps.setLong(2, taskId); ps.executeUpdate();
+        }
+    }
+
 }
 
