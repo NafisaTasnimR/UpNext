@@ -295,12 +295,12 @@ public class TaskService {
     // Task Status Management (enhanced with project status integration)
     // ==============================================================================
 
-    public void start(long taskId) throws SQLException {
+    /*public void start(long taskId) throws SQLException {
         if (!dependenciesSatisfied(taskId)) {
             throw new SQLException("Task has unfinished dependencies");
         }
         taskDAO.updateStatus(taskId, "IN_PROGRESS");
-    }
+    }*/
 
     public void complete(long taskId) throws SQLException {
         if (!dependenciesSatisfied(taskId)) {
@@ -434,4 +434,58 @@ public class TaskService {
         // Use the enhanced method
         createTaskWithProjectStatus(projectId, title, description, assigneeId, actingRole);
     }
+
+    public boolean canStartTask(long taskId) throws SQLException {
+        // First, check regular dependencies using DAO
+        if (depDAO.hasUnfinishedPredecessor(taskId)) {
+            return false;
+        }
+
+        // Then check priority-based dependencies using DAO
+        Task currentTask = get(taskId);
+        if (currentTask.getParentTaskId() == null) {
+            return true; // No priority check for top-level tasks
+        }
+
+        // Use the DAO method instead of raw SQL
+        List<Task> higherPriorityTasks = depDAO.getHigherPriorityUnfinishedTasks(
+                taskId,
+                currentTask.getParentTaskId(),
+                currentTask.getPriority()
+        );
+
+        return higherPriorityTasks.isEmpty();
+    }
+
+    public void start(long taskId) throws SQLException {
+        if (!canStartTask(taskId)) {
+            Task task = get(taskId);
+            List<Task> blockingTasks = depDAO.getHigherPriorityUnfinishedTasks(
+                    taskId,
+                    task.getParentTaskId(),
+                    task.getPriority()
+            );
+
+            StringBuilder errorMessage = new StringBuilder();
+            errorMessage.append("You must complete these higher priority tasks first:\n\n");
+
+            for (Task blockingTask : blockingTasks) {
+                errorMessage.append("• ").append(blockingTask.getTitle())
+                        .append(" (").append(blockingTask.getPriority()).append(")");
+
+                // Add assignee info if available
+                if (blockingTask.getAssigneeName() != null) {
+                    errorMessage.append(" - Assigned to: ").append(blockingTask.getAssigneeName());
+                }
+                errorMessage.append("\n");
+            }
+
+            errorMessage.append("\nComplete these tasks before starting: ").append(task.getTitle());
+
+            throw new SQLException(errorMessage.toString());
+        }
+
+        taskDAO.updateStatus(taskId, "IN_PROGRESS");
+    }
+
 }

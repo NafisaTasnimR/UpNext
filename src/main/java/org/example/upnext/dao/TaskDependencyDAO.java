@@ -1,6 +1,7 @@
 package org.example.upnext.dao;
 
 
+import org.example.upnext.model.Task;
 import org.example.upnext.model.TaskDependency;
 
 import java.sql.SQLException;
@@ -11,5 +12,6 @@ public interface TaskDependencyDAO {
     void delete(long depId) throws SQLException;
     List<TaskDependency> findForSuccessor(long successorTaskId) throws SQLException;
     boolean hasUnfinishedPredecessor(long successorTaskId) throws SQLException;
+    List<Task> getHigherPriorityUnfinishedTasks(long taskId, long parentTaskId, String currentPriority) throws SQLException;
 }
 

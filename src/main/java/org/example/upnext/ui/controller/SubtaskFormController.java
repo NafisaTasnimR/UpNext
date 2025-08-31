@@ -9,6 +9,7 @@ import org.example.upnext.model.Task;
 import org.example.upnext.model.User;
 import org.example.upnext.service.TaskService;
 import org.example.upnext.service.ProjectService;
+import org.example.upnext.model.Project;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -19,10 +20,12 @@ public class SubtaskFormController {
     @FXML private Label parentLabel, statusLabel;
     @FXML private TextField titleField;
     @FXML private TextArea descArea;
-    @FXML private DatePicker startPicker;        // Add these to your FXML if not present
-    @FXML private DatePicker duePicker;          // Add these to your FXML if not present
-    @FXML private ComboBox<User> assigneeBox;    // Add these to your FXML if not present
-    @FXML private ComboBox<String> priorityBox;  // Add these to your FXML if not present
+    @FXML private ComboBox<String> priorityBox;  // Priority dropdown
+
+    // Optional date fields if you want to keep them
+    @FXML private DatePicker startPicker;
+    @FXML private DatePicker duePicker;
+    @FXML private ComboBox<User> assigneeBox;
 
     private TaskService taskService;
     private ProjectService projectService;
@@ -38,12 +41,10 @@ public class SubtaskFormController {
         taskService.setProjectService(projectService);
         taskService.setProjectDAO(new ProjectDAOImpl());
 
-        // Initialize priority box if it exists
-        if (priorityBox != null) {
-            List<String> priorities = Arrays.asList("LOW", "MEDIUM", "HIGH", "CRITICAL");
-            priorityBox.getItems().setAll(priorities);
-            priorityBox.getSelectionModel().select("MEDIUM");
-        }
+        // Initialize priority box with all priority options
+        List<String> priorities = Arrays.asList("LOW", "MEDIUM", "HIGH", "CRITICAL");
+        priorityBox.getItems().setAll(priorities);
+        priorityBox.getSelectionModel().select("MEDIUM"); // Default to MEDIUM
 
         // Initialize assignee box if it exists
         if (assigneeBox != null) {
@@ -98,6 +99,7 @@ public class SubtaskFormController {
                         parent.getProjectId(), startDate, dueDate);
 
                 statusLabel.setText("Subtask status will be: " + subtaskStatus +
+                        " | Priority: " + priorityBox.getValue() +
                         " (based on project status and dates)");
                 statusLabel.setStyle("-fx-text-fill: #2E8B57;"); // Green text for good status
             }
@@ -116,17 +118,19 @@ public class SubtaskFormController {
         }
 
         String desc = descArea.getText();
+        String priority = priorityBox.getValue(); // Get selected priority
         LocalDate startDate = startPicker != null ? startPicker.getValue() : null;
         LocalDate dueDate = duePicker != null ? duePicker.getValue() : null;
         User selectedAssignee = assigneeBox != null ? assigneeBox.getValue() : null;
         Long assigneeId = selectedAssignee != null ? selectedAssignee.getUserId() : null;
 
         try {
-            // Use the enhanced method with full validation and date support
-            long subtaskId = taskService.createSubtaskWithValidation(
+            // Create the subtask with the enhanced method
+            long subtaskId = createSubtaskWithPriority(
                     parent.getTaskId(),
                     title,
                     desc,
+                    priority,
                     assigneeId,
                     startDate,
                     dueDate,
@@ -135,15 +139,113 @@ public class SubtaskFormController {
             );
 
             showSuccessMessage("Subtask Created",
-                    "Subtask '" + title + "' created successfully with ID: " + subtaskId);
+                    "Subtask '" + title + "' created successfully with ID: " + subtaskId +
+                            "\nPriority: " + priority);
             close();
 
         } catch (SQLException e) {
-            // Show detailed warning dialog for validation errors
             showValidationError("Cannot Create Subtask", e.getMessage());
         } catch (Exception e) {
             showValidationError("Error", "An unexpected error occurred: " + e.getMessage());
         }
+    }
+
+    /**
+     * Enhanced method to create subtask with priority
+     */
+    private long createSubtaskWithPriority(long parentTaskId, String title, String description,
+                                           String priority, Long assigneeId, LocalDate startDate,
+                                           LocalDate dueDate, long actingUserId, String actingGlobalRole)
+            throws SQLException {
+
+        // Get the parent task using taskService
+        Task parent = taskService.get(parentTaskId);
+
+        // Check if tasks can be created in this project using projectService
+        if (projectService != null) {
+            try {
+                // Use the correct method signature - pass projectId (long) not Project object
+                if (!projectService.canCreateTasksInProject(parent.getProjectId())) {
+                    // Get project info for better error message
+                    // Note: You may need to add a getProject method to ProjectService if it doesn't exist
+                    throw new SQLException("Cannot create new subtasks in this project due to its status.");
+                }
+            } catch (Exception e) {
+                throw new SQLException("Error checking project status: " + e.getMessage());
+            }
+        }
+
+        // Check permissions
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(actingGlobalRole);
+        boolean isManager = false;
+        boolean isParentAssignee = parent.getAssigneeId() != null && parent.getAssigneeId().equals(actingUserId);
+
+        // Use projectService to check manager role
+        if (projectService != null) {
+            try {
+                isManager = projectService.isManagerOfProject(parent.getProjectId(), actingUserId);
+            } catch (SQLException e) {
+                System.err.println("Warning: Could not check manager status: " + e.getMessage());
+            }
+        }
+
+        if (!isAdmin && !isManager && !isParentAssignee) {
+            throw new SQLException("Only Admin/Manager or the parent task's assignee can create subtasks.");
+        }
+
+        // Check assignee membership - use ProjectMemberDAO directly if needed, or check through project members list
+        if (assigneeId != null && projectMembers != null) {
+            boolean isMember = false;
+            for (User member : projectMembers) {
+                if (member.getUserId() == assigneeId) {
+                    isMember = true;
+                    break;
+                }
+            }
+            if (!isMember) {
+                throw new SQLException("Assignee must be a member of the project.");
+            }
+        }
+
+        // Determine subtask status based on project status AND dates
+        String subtaskStatus = "TODO"; // Default
+        if (projectService != null) {
+            try {
+                subtaskStatus = projectService.getNewTaskStatusForProject(
+                        parent.getProjectId(), startDate, dueDate);
+            } catch (SQLException e) {
+                System.err.println("Warning: Could not determine status from project: " + e.getMessage());
+            }
+        }
+
+        // Create the task object
+        Task sub = new Task();
+        sub.setProjectId(parent.getProjectId());
+        sub.setParentTaskId(parentTaskId);
+        sub.setTitle(title);
+        sub.setDescription(description);
+        sub.setAssigneeId(assigneeId);
+        sub.setStartDate(startDate);
+        sub.setDueDate(dueDate);
+        sub.setStatus(subtaskStatus);
+        sub.setPriority(priority); // Set the selected priority
+        sub.setProgressPct(0.0);
+
+        // Use taskService to create the subtask
+        long newId = taskService.create(sub);
+
+        // If parent was DONE and now has a new child, update parent status using taskDAO directly
+        if ("DONE".equalsIgnoreCase(parent.getStatus())) {
+            try {
+                // Use taskDAO to update status since taskService.updateStatus might not exist
+                TaskDAOImpl taskDAO = new TaskDAOImpl();
+                taskDAO.updateStatus(parentTaskId, "IN_PROGRESS");
+            } catch (SQLException e) {
+                System.err.println("Warning: Could not update parent task status: " + e.getMessage());
+            }
+        }
+
+        return newId;
     }
 
     @FXML
@@ -155,10 +257,7 @@ public class SubtaskFormController {
         ((Stage) titleField.getScene().getWindow()).close();
     }
 
-    // ==============================================================================
     // Helper Methods for User-Friendly Dialogs
-    // ==============================================================================
-
     private void showValidationError(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.WARNING);
         alert.setTitle(title);
@@ -179,6 +278,11 @@ public class SubtaskFormController {
         alert.showAndWait();
     }
 
+    // Update status info when priority changes
+    @FXML
+    private void onPriorityChanged() {
+        updateStatusInfo();
+    }
 
     @FXML
     private void onStartDateChanged() {
