@@ -55,10 +55,8 @@ public class ProjectService {
 
     /** Average of task progress percentages. */
     public double calculateOverallProgress(long projectId) throws SQLException {
-        List<Task> tasks = taskDAO.findByProject(projectId);
-        if (tasks.isEmpty()) return 0.0;
-        double sum = tasks.stream().mapToDouble(Task::getProgressPct).sum();
-        return Math.round((sum / tasks.size()) * 100.0) / 100.0;
+        // Delegate the call to the DAO, which fetches the value calculated by the DB trigger/function
+        return projectDAO.getProjectProgress(projectId);
     }
     private static String roleOf(User u) {
         return u == null || u.getGlobalRole() == null ? "" : u.getGlobalRole().trim().toUpperCase();
@@ -81,7 +79,6 @@ public class ProjectService {
         projectDAO.delete(projectId); // cascades are handled in DB
     }
 
-}
 
     public boolean isManagerOfProject(long projectId, long userId) throws SQLException {
         return pmDAO.hasRole(projectId, userId, "MANAGER"); // uses PROJECT_MEMBERS.PROJECT_ROLE
