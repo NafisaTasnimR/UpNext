@@ -7,7 +7,7 @@ EXCEPTION
 END;
 /
 
--- Recreate as a statement-level trigger (NO "FOR EACH ROW")
+-- Recreate as a statemen-level trigger (NO "FOR EACH ROW")
 CREATE OR REPLACE TRIGGER TRG_TASKS_STATUS_RECALC_BLOCK
 AFTER UPDATE OF STATUS ON TASKS
 BEGIN
