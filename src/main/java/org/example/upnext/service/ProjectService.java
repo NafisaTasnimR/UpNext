@@ -81,8 +81,6 @@ public class ProjectService {
         projectDAO.delete(projectId); // cascades are handled in DB
     }
 
-}
-
     public boolean isManagerOfProject(long projectId, long userId) throws SQLException {
         return pmDAO.hasRole(projectId, userId, "MANAGER"); // uses PROJECT_MEMBERS.PROJECT_ROLE
     }

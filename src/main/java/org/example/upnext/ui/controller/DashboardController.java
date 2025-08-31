@@ -17,13 +17,15 @@ import org.example.upnext.dao.impl.TaskDAOImpl;
 import org.example.upnext.model.Project;
 import org.example.upnext.model.Task;
 import org.example.upnext.model.User;
+import org.example.upnext.service.NotificationService;
 import org.example.upnext.service.ProjectService;
 import org.example.upnext.service.TaskService;
-
+import org.example.upnext.service.NotificationService.Role;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.example.upnext.service.NotificationScheduler;
 
 public class DashboardController {
 
@@ -35,6 +37,47 @@ public class DashboardController {
     @FXML private Button assignMembersBtn;  // Manager-only
     @FXML private Button assignTaskBtn;     // Manager-only
     @FXML private Button newSubtaskBtn;
+    @FXML private Button notificationBtn;
+    // Add this method to your DashboardController class
+    @FXML
+    private void onShowNotifications() {
+        if (currentUser == null) {
+            statusLabel.setText("Not logged in");
+            return;
+        }
+
+        Project p = projectTable.getSelectionModel().getSelectedItem();
+        if (p == null) {
+            statusLabel.setText("Select a project first");
+            return;
+        }
+
+        try {
+            // Determine user role for notifications
+            NotificationService.Role notificationRole;
+            String globalRole = currentUser.getGlobalRole();
+            if ("ADMIN".equalsIgnoreCase(globalRole)) {
+                notificationRole = NotificationService.Role.ADMIN;
+            } else if ("MANAGER".equalsIgnoreCase(globalRole)) {
+                notificationRole = NotificationService.Role.MANAGER;
+            } else {
+                notificationRole = NotificationService.Role.MEMBER;
+            }
+
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/Notification.fxml"));
+            Scene scene = new Scene(loader.load());
+            NotificationController ctrl = loader.getController();
+            ctrl.setContext(p.getProjectId(), currentUser.getUserId(), notificationRole);
+
+            Stage stage = new Stage();
+            stage.setTitle("Notifications - " + p.getName());
+            stage.setScene(scene);
+            stage.show();
+        } catch (Exception e) {
+            statusLabel.setText("Open notifications failed: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 
     private final ProjectService projectService =
             new ProjectService(new ProjectDAOImpl(), new TaskDAOImpl());
@@ -55,6 +98,7 @@ public class DashboardController {
         statusLabel.setText("Logged in as: " + u.getUsername());
         applyRoleUI();
         loadProjects();
+        NotificationScheduler.startScheduler();
     }
 
     @FXML

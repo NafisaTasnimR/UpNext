@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<VBox xmlns:fx="http://javafx.com/fxml"
+      spacing="10"
+      fx:controller="org.example.upnext.ui.controller.NotificationController">
+
+    <!-- Add proper padding here -->
+    <padding>
+        <Insets top="10" right="10" bottom="10" left="10"/>
+    </padding>
+
+    <HBox spacing="8">
+        <Button text="Inbox" onAction="#onShowInbox"/>
+        <Button text="Overdue" onAction="#onShowOverdue"/>
+        <Pane HBox.hgrow="ALWAYS"/>
+        <Button text="Refresh" onAction="#onRefreshNotifications"/>
+    </HBox>
+
+    <TableView fx:id="notificationTable" prefHeight="400">
+        <columns>
+            <TableColumn fx:id="colType" text="Type" prefWidth="120"/>
+            <TableColumn fx:id="colTaskTitle" text="Task" prefWidth="220"/>
+            <TableColumn fx:id="colDueDate" text="Due" prefWidth="120"/>
+            <TableColumn fx:id="colMessage" text="Message" prefWidth="380"/>
+            <TableColumn fx:id="colCreatedAt" text="At" prefWidth="160"/>
+        </columns>
+    </TableView>
+</VBox>

@@ -11,7 +11,7 @@
             <Button fx:id="assignManagerBtn" text="Assign Manager" onAction="#onAssignManager"/>
             <!-- Manager-only -->
             <Button fx:id="assignMembersBtn" text="Assign Members" onAction="#onAssignMembers"/>
-
+            <Button text="Notifications" onAction="#onShowNotifications"/>
             <Button text="Logout" onAction="#onLogout"/>
         </ToolBar>
     </top>
