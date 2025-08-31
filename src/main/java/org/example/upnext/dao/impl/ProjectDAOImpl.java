@@ -168,8 +168,6 @@ public class ProjectDAOImpl extends BaseDAO implements ProjectDAO {
         }
     }
 
-}
-
 
     @Override
     public double getProjectProgress(long projectId) throws SQLException {
