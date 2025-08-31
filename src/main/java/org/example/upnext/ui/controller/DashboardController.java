@@ -2,6 +2,7 @@ package org.example.upnext.ui.controller;
 
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
+import javafx.scene.layout.HBox;
 import javafx.util.Duration;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -179,6 +180,7 @@ public class DashboardController {
 
     @FXML
     public void initialize() {
+        wireEditProjectButton();
         // Projects table columns
         TableColumn<Project, String> nameCol = new TableColumn<>("Name");
         nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
@@ -399,7 +401,16 @@ public class DashboardController {
     @FXML
     public void onEditProject() {
         Project p = projectTable.getSelectionModel().getSelectedItem();
-        if (p == null) { statusLabel.setText("Select a project to edit"); return; }
+        if (p == null) {
+            statusLabel.setText("Select a project to edit");
+            return;
+        }
+        if (currentUser == null || currentUser.getUserId() != p.getOwnerId()) {
+            statusLabel.setText("Only the project owner can edit this project");
+            new Alert(Alert.AlertType.WARNING,
+                    "Only the project owner can edit project details.").showAndWait();
+            return;
+        }
 
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/ProjectForm.fxml"));
@@ -428,6 +439,30 @@ public class DashboardController {
         } catch (Exception ex) {
             statusLabel.setText("Edit failed: " + ex.getMessage());
         }
+    }
+
+    private void wireEditProjectButton() {
+        projectTable.getSelectionModel().selectedItemProperty().addListener((obs, oldProject, newProject) -> {
+            boolean canEdit = false;
+            if (newProject != null && currentUser != null) {
+                // Only enable if current user is the project owner
+                canEdit = (currentUser.getUserId() == newProject.getOwnerId());
+            }
+
+            // Find the Edit button in the HBox (you might need to add an fx:id to the button)
+            HBox projectButtons = (HBox) projectTable.lookup("HBox");
+            if (projectButtons != null) {
+                for (javafx.scene.Node node : projectButtons.getChildren()) {
+                    if (node instanceof Button) {
+                        Button button = (Button) node;
+                        if ("Edit".equals(button.getText())) {
+                            button.setDisable(!canEdit);
+                            break;
+                        }
+                    }
+                }
+            }
+        });
     }
 
     @FXML
