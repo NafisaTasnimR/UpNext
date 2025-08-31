@@ -11,6 +11,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
+import org.example.upnext.auth.AuthContext;
 
 import java.util.Optional;
 
@@ -29,6 +30,7 @@ public class LoginController {
                 FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/DashboardView.fxml"));
                 Scene scene = new Scene(loader.load());
                 DashboardController ctrl = loader.getController();
+                AuthContext.setUsername(u.get().getUsername());
                 ctrl.setCurrentUser(u.get());
                 Stage stage = (Stage) usernameField.getScene().getWindow();
                 stage.setScene(scene);

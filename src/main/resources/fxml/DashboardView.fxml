@@ -29,6 +29,7 @@
                     <Button text="Start" onAction="#onStartTask"/>
                     <Button text="Complete" onAction="#onCompleteTask"/>
                     <Button text="Refresh" onAction="#onRefreshTasks"/>
+                    <Button text="Delete Task" onAction="#onDeleteTask"/>
                 </HBox>
             </VBox>
         </SplitPane>
