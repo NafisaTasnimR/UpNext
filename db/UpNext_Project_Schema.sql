@@ -343,6 +343,10 @@ BEGIN
   END IF;
 END;
 /
+
+
+DROP TRIGGER UPNEXT.TRG_TASKS_CHECK_DEPS;
+
 -- (Optional) prevent setting PROGRESS_PCT to 100 unless status DONE
 CREATE OR REPLACE TRIGGER TRG_TASKS_PROGRESS_GUARD
 BEFORE UPDATE OF PROGRESS_PCT ON TASKS
@@ -649,6 +653,110 @@ BEGIN
     );
 END;
 /
+
+
+commit;
 --------------------------------------------------------------------------------
 -- End of schema
 --------------------------------------------------------------------------------
+
+-- SHA256('admin123') = 240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9
+INSERT INTO USERS (USER_ID, USERNAME, EMAIL, PASSWORD_HASH, GLOBAL_ROLE, STATUS)
+VALUES (USERS_SEQ.NEXTVAL, 'admin', 'admin@example.com',
+        '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',
+        'ADMIN', 'ACTIVE');
+
+
+ALTER TABLE projects ADD (assigned_manager_id NUMBER);
+
+ALTER TABLE projects
+  ADD CONSTRAINT fk_proj_manager FOREIGN KEY (assigned_manager_id)
+  REFERENCES users(user_id);
+  
+  
+CREATE OR REPLACE TRIGGER TRG_TASKS_ROLLUP
+FOR INSERT OR UPDATE OF STATUS ON TASKS
+COMPOUND TRIGGER
+
+  TYPE num_tab IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
+  g_parent_ids num_tab;
+  g_count      PLS_INTEGER := 0;
+
+  PROCEDURE add_parent(p_id NUMBER) IS
+    i PLS_INTEGER; found BOOLEAN := FALSE;
+  BEGIN
+    IF p_id IS NOT NULL THEN
+      i := g_parent_ids.FIRST;
+      WHILE i IS NOT NULL LOOP
+        IF g_parent_ids(i) = p_id THEN found := TRUE; EXIT; END IF;
+        i := g_parent_ids.NEXT(i);
+      END LOOP;
+      IF NOT found THEN
+        g_count := NVL(g_count,0) + 1;
+        g_parent_ids(g_count) := p_id;
+      END IF;
+    END IF;
+  END;
+
+  BEFORE STATEMENT IS
+  BEGIN
+    g_parent_ids.DELETE; g_count := 0;
+  END BEFORE STATEMENT;
+
+  AFTER EACH ROW IS
+  BEGIN
+    IF INSERTING OR UPDATING('STATUS') THEN
+      add_parent(:NEW.PARENT_TASK_ID);
+    END IF;
+  END AFTER EACH ROW;
+
+  AFTER STATEMENT IS
+  BEGIN
+    IF g_parent_ids.COUNT > 0 THEN
+      FOR i IN g_parent_ids.FIRST .. g_parent_ids.LAST LOOP
+        IF g_parent_ids.EXISTS(i) THEN
+          DECLARE
+            v_pid      NUMBER := g_parent_ids(i);
+            v_total    NUMBER;
+            v_not_done NUMBER;
+          BEGIN
+            IF v_pid IS NOT NULL THEN
+              -- If new child exists under a DONE parent, flip to IN_PROGRESS
+              UPDATE TASKS
+                 SET STATUS='IN_PROGRESS', UPDATED_AT=SYSTIMESTAMP
+               WHERE TASK_ID = v_pid AND STATUS='DONE';
+
+              -- If all children are DONE, set parent DONE
+              SELECT COUNT(*),
+                     SUM(CASE WHEN UPPER(STATUS) <> 'DONE' THEN 1 ELSE 0 END)
+                INTO v_total, v_not_done
+                FROM TASKS
+               WHERE PARENT_TASK_ID = v_pid;
+
+              IF v_total > 0 AND v_not_done = 0 THEN
+                UPDATE TASKS
+                   SET STATUS='DONE', UPDATED_AT=SYSTIMESTAMP
+                 WHERE TASK_ID = v_pid AND STATUS <> 'DONE';
+              END IF;
+            END IF;
+          END;
+        END IF;
+      END LOOP;
+    END IF;
+  END AFTER STATEMENT;
+
+END TRG_TASKS_ROLLUP;
+/
+
+
+SELECT trigger_name, triggering_event, trigger_type, status
+FROM USER_TRIGGERS
+WHERE TABLE_NAME = 'TASKS';
+
+DROP TRIGGER UPNEXT.TRG_ROLLUP_PARENT_DONE;
+commit;
+
+--------------------------------------------------------------------------------
+-- End of schema
+--------------------------------------------------------------------------------
+

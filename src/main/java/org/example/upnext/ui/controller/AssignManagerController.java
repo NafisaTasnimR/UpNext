@@ -13,9 +13,8 @@ import java.util.List;
 import java.util.function.BiConsumer;
 
 public class AssignManagerController {
-    @FXML private Label projectLabel;
+    @FXML private Label projectLabel, statusLabel;
     @FXML private ComboBox<User> managerBox;
-    @FXML private Label statusLabel;
 
     private final UserDAOImpl userDAO = new UserDAOImpl();
     private final ProjectService projectService =
@@ -66,11 +65,6 @@ public class AssignManagerController {
         }
     }
 
-    @FXML
-    public void onCancel() { close(); }
-
-    private void close() {
-        ((Stage) managerBox.getScene().getWindow()).close();
-    }
+    @FXML public void onCancel() { close(); }
+    private void close() { ((Stage) managerBox.getScene().getWindow()).close(); }
 }
-
